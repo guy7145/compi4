@@ -318,6 +318,7 @@
         "## a^b/e*3   ^4 *7/3------++ - - - - + ---+++------b"
         "## a^b/e*3   ^4 *7/3------++++    ++------b"
         "## a^b/e*3   ^4 *7/3 + -b"
+	"(define <Level-Paren-&-Friends> (disj <InfixParen> <Primitives-and-such>))"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; barak_tests
 "

@@ -1,12 +1,20 @@
 (define <recurse-function>
   (let ((run (compose-patterns
               (pattern-rule
-               `(var ,(? 'var))
-               (lambda (var) `(var ,var)))
-
-              (pattern-rule
                `(const ,(? 'const))
                (lambda (const) `(const ,const)))
+              
+              (pattern-rule
+               `(fvar ,(? 'v))
+               (lambda (v) `(fvar ,v)))
+              
+              (pattern-rule
+               `(pvar ,(? 'v) ,(? 'minor))
+               (lambda (v minor) `(pvar ,v ,minor)))
+              
+              (pattern-rule
+               `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
+               (lambda (v major minor) `(bvar ,v ,major ,minor)))
 
               (pattern-rule
                `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
@@ -31,6 +39,10 @@
 
               (pattern-rule
                `(applic ,(? 'func) ,(? 'exprs list?))
+               (lambda (func exprs) `(applic ,(<recurse-function> func) ,(map <recurse-function> exprs))))
+              
+              (pattern-rule
+               `(tc-applic ,(? 'func) ,(? 'exprs list?))
                (lambda (func exprs) `(applic ,(<recurse-function> func) ,(map <recurse-function> exprs))))
 
               (pattern-rule

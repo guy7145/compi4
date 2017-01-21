@@ -1292,11 +1292,11 @@
     (<<exract-def>> `(,(eliminate-nested-defines body))
                     (lambda (ds es)
                       (if (null? ds)
-                          
+
                           (if (equal? (length es) 1)
                               (^lambda args (car es))
                               (^lambda args `(seq ,es)))
-                          
+
                           ;;                                 def-name
                           (let ((params (map (lambda (def) (cadadr def)) ds))
                                 (<dummy-values> (map (lambda (def) `(const #f)) ds))
@@ -1409,7 +1409,7 @@
                           `(var ,(? 'v))
                           (lambda (v)
                             (cond ((member v pvars) `(pvar ,v ,(get-var-minor-index v pvars)))
-                                  ((let ((belonging-list 
+                                  ((let ((belonging-list
                                           (map (lambda (s) (member v s)) bvars)
                                           ))
                                      (ormap (lambda (x) x) belonging-list))
@@ -1702,7 +1702,7 @@
                             (let ((results (map (lambda (x) (run is-bound? x)) exprs)))
                                         ;(let ((results (map (lambda (x) (validate-candidate <v> x)) results)))
                               (fold-left accumulate-usage empty-usage results))))
-                         
+
                          (pattern-rule
                           `(box ,(? 'var))
                           (lambda (var)
@@ -1843,7 +1843,7 @@
                                                                (if status `(set (var ,arg) (box (var ,arg))) '())))
                                                            <args-usage-statuses>)))))
                 (compose-patterns
-                 
+
                  (pattern-rule
                   `(lambda-simple ,(? 'args list?) ,(? 'body))
                   (lambda (args body)
@@ -1880,33 +1880,382 @@
                               `(lambda-var ,arg (seq ,(append setters-seq (flatten-list (cdr (box-set body))))))
                               `(lambda-var ,arg (seq ,(append setters-seq `(,(box-set body))))))))))))
 
-                (pattern-rule
-                 `(applic ,(? 'func) ,(? 'exprs list?))
-                 (lambda (func exprs) `(applic ,(box-set func) ,(map box-set exprs))))
+              (pattern-rule
+               `(applic ,(? 'func) ,(? 'exprs list?))
+               (lambda (func exprs) `(applic ,(box-set func) ,(map box-set exprs))))
 
-                (pattern-rule
-                 `(or ,(? 'args list?))
-                 (lambda (args) `(or ,(map box-set args))))
+              (pattern-rule
+               `(or ,(? 'args list?))
+               (lambda (args) `(or ,(map box-set args))))
 
-                (pattern-rule
-                 `(set ,(? 'var) ,(? 'val))
-                 (lambda (var val) `(set ,(box-set var) ,(box-set val))))
+              (pattern-rule
+               `(set ,(? 'var) ,(? 'val))
+               (lambda (var val) `(set ,(box-set var) ,(box-set val))))
 
-                (pattern-rule
-                 `(seq ,(? 'exprs list?))
-                 (lambda (exprs) `(seq ,(map box-set exprs))))
+              (pattern-rule
+               `(seq ,(? 'exprs list?))
+               (lambda (exprs) `(seq ,(map box-set exprs))))
 
-                (pattern-rule
-                 `(box ,(? 'var))
-                 (lambda (var) `(box ,(box-set var))))
+              (pattern-rule
+               `(box ,(? 'var))
+               (lambda (var) `(box ,(box-set var))))
 
-                (pattern-rule
-                 `(box-get ,(? 'var))
-                 (lambda (var) `(box-get ,(box-set var))))
+              (pattern-rule
+               `(box-get ,(? 'var))
+               (lambda (var) `(box-get ,(box-set var))))
 
-                (pattern-rule
-                 `(box-set ,(? 'var) ,(? 'val))
-                 (lambda (var val) `(box-set ,(box-set var) ,(box-set val))))
-                )))
-        (lambda (e)
-          (run e (lambda () (error 'box-set (format "I can't recognize this: ~s" e)))))))
+              (pattern-rule
+               `(box-set ,(? 'var) ,(? 'val))
+               (lambda (var val) `(box-set ,(box-set var) ,(box-set val))))
+              )))
+    (lambda (e)
+      (run e (lambda () (error 'box-set (format "I can't recognize this: ~s" e)))))))
+
+
+;;
+;; *************************************************************************************************************************************
+;; _________tools__________________________________________________
+;; ________________________________________________________________ 
+
+(define file->string
+  (lambda (in-file)
+    (let ((in-port (open-input-file in-file)))
+      (letrec ((run
+                (lambda ()
+                  (let ((ch (read-char in-port)))
+                    (if (eof-object? ch)
+                        (begin
+                          (close-input-port in-port)
+                          '())
+                        (cons ch (run)))))))
+        (list->string
+         (run))))))
+
+(define set-subtraction
+  (lambda (s1 s2)
+    (fold-left (lambda (acc el) (append acc (if (member el s2) '() `(,el)))) '() s1)))
+(define set-union
+  (lambda (s1 s2)
+    (append s1 (subtraction s2 s1))))
+(define list->set
+  (lambda (s)
+    (fold-left
+     (lambda (acc el)
+       (if (member el acc)
+           acc
+           `(,@acc ,el)))
+     '()
+     s)))
+
+(define label-generator
+  (lambda (label) ;; label must be string! i.e. "my_label"
+    (let ((counter 0))
+      (lambda ()
+        (set! counter (+ counter 1))
+        (string->symbol (string-append label (number->string counter)))))))
+
+(define vector-get-element-index
+  (let ((get-element-index-v-el-i
+         (lambda (vector el)
+           (letrec ((get-element-index-i
+                     (lambda (i)
+                       (if (equal? (vector-ref vector i) el) i (get-element-index-i (+ i 1))))))
+             get-element-index-i))))
+    (lambda (vector el)
+      ((get-element-index-v-el-i vector el) 0))))
+
+;; _________code-gen_______________________________________________
+;; ________________________________________________________________ 
+
+;; TODO:
+(define code-gen
+  (let ((^run
+         (lambda (fvars consts)
+           (letrec ((code-gen
+                     (compose-patterns
+                      (pattern-rule
+                       `(const ,(? 'const))
+                       (lambda (const)
+                         (let ((addr (vector-get-element-index consts const)))
+                           (string-append "mov(R0,IMM(" (number->string addr) "));\n"))))
+
+                      (pattern-rule
+                       `(fvar ,(? 'v))
+                       (lambda (v) ""))
+
+                      (pattern-rule
+                       `(pvar ,(? 'v) ,(? 'minor))
+                       (lambda (v minor) ""))
+
+                      (pattern-rule
+                       `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
+                       (lambda (v major minor) ""))
+
+                      (pattern-rule
+                       `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
+                       (lambda (test dit dif) ""))
+
+                      (pattern-rule
+                       `(def ,(? 'var-name) ,(? 'val))
+                       (lambda (var-name val) ""))
+
+                      (pattern-rule
+                       `(lambda-simple ,(? 'args list?) ,(? 'body))
+                       (lambda (args body)
+                         ""))
+
+                      (pattern-rule
+                       `(lambda-opt ,(? 'args list?) ,(? 'opt-arg) ,(? 'body))
+                       (lambda (args opt-arg body) ""))
+
+                      (pattern-rule
+                       `(lambda-var ,(? 'arg) ,(? 'body))
+                       (lambda (arg body) ""))
+
+                      (pattern-rule
+                       `(applic ,(? 'func) ,(? 'exprs list?))
+                       (lambda (func exprs) ""))
+
+                      (pattern-rule
+                       `(tc-applic ,(? 'func) ,(? 'exprs list?))
+                       (lambda (func exprs) ""))
+
+                      (pattern-rule
+                       `(or ,(? 'args list?))
+                       (lambda (args) ""))
+
+                      (pattern-rule
+                       `(set ,(? 'var) ,(? 'val))
+                       (lambda (var val) ""))
+
+                      (pattern-rule
+                       `(seq ,(? 'exprs list?))
+                       (lambda (exprs) ""))
+
+                      (pattern-rule
+                       `(box ,(? 'var))
+                       (lambda (var) ""))
+
+                      (pattern-rule
+                       `(box-get ,(? 'var))
+                       (lambda (var) ""))
+
+                      (pattern-rule
+                       `(box-set ,(? 'var) ,(? 'val))
+                       (lambda (var val) ""))
+                      )))
+             code-gen))))
+
+    (lambda (e fvars consts)
+      ((^run fvars consts) e (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))))))
+
+
+
+
+
+;; _________construct-tables_______________________________________
+;; ________________________________________________________________  
+(load "tdd-tools.scm")
+
+(define disassemble-const
+  (lambda (c)
+    (cond ((null? c) c)
+          ((not (list? c)) `(,c))
+          (else (let ((first (car c))
+                      (rest (cdr c)))
+                  `(,@(disassemble-const rest) ,@(disassemble-const first) ,c))))))
+
+(define construct-tables
+  (letrec ((^construct-sequence-tables
+            (lambda (construct-tables-inner)
+              (letrec ((construct-sequence-tables
+                        (lambda (es fvars consts cont)
+                          (if (null? es)
+                              (cont fvars consts)
+                              (construct-tables-inner (car es)
+                               fvars
+                               consts
+                               (lambda (fvars consts)
+                                 (construct-sequence-tables
+                                  (cdr es)
+                                  fvars
+                                  consts
+                                  cont)))))))
+                construct-sequence-tables))))
+    (letrec ((construct-tables-inner
+              (lambda (e fvars consts cont)
+                (letrec ((construct-sequence-tables (^construct-sequence-tables construct-tables-inner)))
+                  (if (null? e)
+                      (cont fvars consts)
+                      (if (not (list? e))
+                          (error 'construct-tables-inner (format "e is not a list: ~s" e))
+                          (let ((p-name (car e)))
+                            (cond ((equal? 'const p-name)
+                                   (cont fvars `(,@consts ,@(sort
+                                                             (lambda (e1 e2) (cond ((and (list? e1)
+                                                                                         (list? e2))
+                                                                                    (< (length e1) (length e2)))
+                                                                                   ((list? e1) #f)
+                                                                                   ((list? e2) #t)
+                                                                                   (> e1 e2)))
+                                                             (disassemble-const (cadr e))))))
+
+                                  ((equal? 'fvar p-name) (cont `(,@fvars ,(cadr e)) consts))
+
+                                  ((or (equal? 'pvar p-name)
+                                       (equal? 'bvar p-name)
+                                       (equal? 'box p-name)
+                                       (equal? 'box-get p-name))
+                                   (cont fvars consts))
+
+                                  ((equal? 'if3 p-name)
+                                   (let ((<test> (cadr e))
+                                         (<dit> (caddr e))
+                                         (<dif> (cadddr e)))
+                                     (construct-sequence-tables `(,<test> ,<dit> ,<dif>) fvars consts cont)))
+                                   #|(construct-tables-inner <test>
+                                    fvars
+                                    consts
+                                    (lambda (fvars1 consts1)
+                                      (construct-tables-inner <dit>
+                                       fvars1
+                                       consts1
+                                       (lambda (fvars2 consts2)
+                                         (construct-tables-inner <dif>
+                                          fvars2
+                                          consts2
+                                          cont)))))))|#
+
+                                  ((equal? 'def p-name) (construct-tables-inner (cadr e) fvars consts cont))
+
+                                  ((equal? 'lambda-simple p-name) (construct-tables-inner (caddr e) fvars consts cont))
+                                  ((equal? 'lambda-opt p-name) (construct-tables-inner (cadddr e) fvars consts cont))
+                                  ((equal? 'lambda-var p-name) (construct-tables-inner (caddr e) fvars consts cont))
+
+                                  ((or (equal? 'applic p-name)
+                                       (equal? 'tc-applic p-name))
+                                   (let ((<func> (cadr e))
+                                         (<args> (caddr e)))
+                                     (construct-sequence-tables `(,<func> ,@<args>) fvars consts cont)))
+
+                                  ((or (equal? 'seq p-name) (equal? 'or p-name)) (construct-sequence-tables (cadr e) fvars consts cont))
+
+                                  ((equal? 'box-set p-name) (construct-tables-inner (caddr e) fvars consts cont))
+
+                                  (else (error 'construct-tables-inner (format "unrecognized pattern: ~s" e)))))))))))
+
+      (let ((<initial-fvars-table> '())
+            (<initial-const-table> `(,(void) () ,#t ,#f)))
+
+        (lambda (e) (construct-tables-inner e <initial-fvars-table> <initial-const-table> (lambda (fvars consts) `(,fvars ,consts))))))))
+
+
+;; _________compile-scheme-file____________________________________
+;; ________________________________________________________________ 
+
+(define prologue "
+/* change to 0 for no debug info to be printed: */
+#define DO_SHOW 1
+
+#include <stdio.h>
+#include <stdlib.h>
+#include \"arch/cisc.h\"
+
+int main() {
+START_MACHINE;
+JUMP(CONTINUE);
+#include \"arch/char.lib\"
+#include \"arch/io.lib\"
+#include \"arch/math.lib\"
+#include \"arch/string.lib\"
+#include \"arch/system.lib\"
+CONTINUE:
+printf(\"hello\");
+")
+(define epilogue "
+STOP_MACHINE;
+return 0; 
+}
+")
+
+(define list->sexpr
+  (lambda (list fail-cont)
+    (<sexpr> list
+             (lambda (e s)
+               (if (null? s) `(,e) `(,e ,@(list->sexpr s fail-cont))))
+             fail-cont)))
+
+(define string->sexpr
+  (lambda (string fail-cont)
+    (list->sexpr (string->list string) fail-cont)))
+
+(define get-tables
+  (lambda (pes)
+    (fold-left
+     (lambda (acc e)
+       (let ((tables (construct-tables e)))
+         `(,(list->set (append (car acc) (car tables)))
+           ,(list->set (append (cadr acc) (cadr tables))))))
+     `(() ())
+     pes)))
+
+(define compile-scheme-file
+  (lambda (source dest)
+    (let* ((code-text (file->string source))
+           (sexprs (string->sexpr code-text (lambda (w) (error 'string->sexpr (format "input is not a legal symbolic expression: ~s" w)))))
+           (pes
+            (map (lambda (sexpr)
+                   (annotate-tc
+                    (pe->lex-pe
+                     (box-set
+                      (remove-applic-lambda-nil
+                       (eliminate-nested-defines
+                        (parse sexpr)))))))
+                 sexprs))
+           (tables (get-tables pes))
+           (fvars (list->vector (car tables)))
+           (consts (list->vector (cadr tables)))
+           (generated-code (fold-left string-append "" (map (lambda (pes) (code-gen pes fvars consts)) pes)))
+                                        ;(generated-code "")
+           (generated-code (string-append prologue generated-code))
+           (generated-code (string-append generated-code epilogue)))
+
+      (let ((output-port (open-output-file dest)))
+        (display generated-code output-port)
+        (close-output-port output-port)
+        tables))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
