@@ -1583,22 +1583,6 @@
 ;; _________box-set________________________________________________
 ;; ________________________________________________________________
 
-#|(define validate-candidate
-  (lambda (<v> candidate)
-    (cond ((equal? <v> candidate) <v>)
-          ((equal? '<set> candidate) '<set>)
-          ((equal? '<get-set> candidate) '<get-set>)
-          (else #f))))
-
-(define accumulate-candidate
-  (lambda (<v>)
-    (lambda (x y)
-      (cond ((equal? x <v>) (if (equal? y '<set>) '<get-set> <v>))
-            ((equal? x '<set>) (if (equal? y <v>) '<get-set> '<set>))
-            ((equal? x '<get-set>) '<get-set>)
-            (else y)))))|#
-
-
 ;;;                   SET GET BOUND
 (define empty-usage `(,#f ,#f ,#f))
 (define usage-or
@@ -1914,8 +1898,9 @@
 
 ;;
 ;; *************************************************************************************************************************************
-;; _________tools__________________________________________________
+;; _________tools and constants____________________________________
 ;; ________________________________________________________________ 
+(define id (lambda (x) x))
 
 (define file->string
   (lambda (in-file)
@@ -1949,10 +1934,15 @@
 
 (define label-generator
   (lambda (label) ;; label must be string! i.e. "my_label"
-    (let ((counter 0))
+    (let ((counter -1))
       (lambda ()
         (set! counter (+ counter 1))
-        (string->symbol (string-append label (number->string counter)))))))
+        (string-append label (number->string counter))))))
+
+(define ^counter
+  (lambda ()
+    (let ((counter -1))
+      (lambda () (set! counter (+ 1 counter)) counter))))
 
 (define vector-get-element-index
   (let ((get-element-index-v-el-i
@@ -1964,97 +1954,159 @@
     (lambda (vector el)
       ((get-element-index-v-el-i vector el) 0))))
 
+(define vector-fold-left
+  (lambda (f acc vector)
+    (fold-left f acc (vector->list vector))))
+
+(define vector-map
+  (letrec ((iterator
+            (lambda (vector-in f i length vector-out)
+              (if (< i length)
+                  (begin (vector-set! vector-out i (f (vector-ref vector-in i))) (iterator vector-in f (+ i 1) length vector-out))
+                  vector-out))))
+    (lambda (f vector)
+      (let ((length (vector-length vector)))
+        (iterator vector f 0 length (make-vector length))))))
+
+(define string-append-list
+  (lambda (list)
+    (fold-left string-append "" list)))
+
+
+(load "cisc-lib.scm")
+
 ;; _________code-gen_______________________________________________
 ;; ________________________________________________________________ 
 
 ;; TODO:
+;; 
+
 (define code-gen
-  (let ((^run
-         (lambda (fvars consts)
-           (letrec ((code-gen
-                     (compose-patterns
-                      (pattern-rule
-                       `(const ,(? 'const))
-                       (lambda (const)
-                         (let ((addr (vector-get-element-index consts const)))
-                           (string-append "mov(R0,IMM(" (number->string addr) "));\n"))))
+  (let ((if3-else (label-generator "if3_else_"))
+        (if3-exit (label-generator "if3_exit_"))
+        (or-exit (label-generator "or_exit_")))
 
-                      (pattern-rule
-                       `(fvar ,(? 'v))
-                       (lambda (v) ""))
+    (let ((^run
+           (lambda (fvars consts)
+             (lambda (cont)
+               (letrec ((code-gen
+                         (lambda (e)
+                           ((compose-patterns
+                             (pattern-rule
+                              `(const ,(? 'const))
+                              (lambda (const)
+                                (let ((index (vector-get-element-index consts const)))
+                                  (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string index)))))))
 
-                      (pattern-rule
-                       `(pvar ,(? 'v) ,(? 'minor))
-                       (lambda (v minor) ""))
+                             (pattern-rule
+                              `(fvar ,(? 'v))
+                              (lambda (v) ""))
 
-                      (pattern-rule
-                       `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
-                       (lambda (v major minor) ""))
+                             (pattern-rule
+                              `(pvar ,(? 'v) ,(? 'minor))
+                              (lambda (v minor) (>mov r0 (>fparg 2 minor))))
 
-                      (pattern-rule
-                       `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
-                       (lambda (test dit dif) ""))
+                             (pattern-rule
+                              `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
+                              (lambda (v major minor)
+                                (nl-string-append
+                                 (>mov r0 (>fparg 0 0))
+                                 (>mov r0 (>indd r0 major))
+                                 (>mov r0 (>indd r0 minor)))))
 
-                      (pattern-rule
-                       `(def ,(? 'var-name) ,(? 'val))
-                       (lambda (var-name val) ""))
+                             (pattern-rule
+                              `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
+                              (lambda (test dit dif)
+                                (let ((else_label (if3-else))
+                                      (exit_label (if3-exit)))
+                                  (nl-string-append ""
+                                                    (code-gen test)
+                                                    (>cmp r0 (>imm sob-false))
+                                                    (>jmp exit_label)
+                                                    (code-gen dit)
+                                                    (>jmp exit_label)
+                                                    (>label else_label)
+                                                    (code-gen dif)
+                                                    (>label exit_label)
+                                                    ))))
 
-                      (pattern-rule
-                       `(lambda-simple ,(? 'args list?) ,(? 'body))
-                       (lambda (args body)
-                         ""))
+                             (pattern-rule
+                              `(def ,(? 'var-name) ,(? 'val))
+                              (lambda (var-name val) ""))
 
-                      (pattern-rule
-                       `(lambda-opt ,(? 'args list?) ,(? 'opt-arg) ,(? 'body))
-                       (lambda (args opt-arg body) ""))
+                             (pattern-rule
+                              `(lambda-simple ,(? 'args list?) ,(? 'body))
+                              (lambda (args body)
+                                ""))
 
-                      (pattern-rule
-                       `(lambda-var ,(? 'arg) ,(? 'body))
-                       (lambda (arg body) ""))
+                             (pattern-rule
+                              `(lambda-opt ,(? 'args list?) ,(? 'opt-arg) ,(? 'body))
+                              (lambda (args opt-arg body) ""))
 
-                      (pattern-rule
-                       `(applic ,(? 'func) ,(? 'exprs list?))
-                       (lambda (func exprs) ""))
+                             (pattern-rule
+                              `(lambda-var ,(? 'arg) ,(? 'body))
+                              (lambda (arg body) ""))
 
-                      (pattern-rule
-                       `(tc-applic ,(? 'func) ,(? 'exprs list?))
-                       (lambda (func exprs) ""))
+                             (pattern-rule
+                              `(applic ,(? 'func) ,(? 'exprs list?))
+                              (lambda (func exprs) ""))
 
-                      (pattern-rule
-                       `(or ,(? 'args list?))
-                       (lambda (args) ""))
+                             (pattern-rule
+                              `(tc-applic ,(? 'func) ,(? 'exprs list?))
+                              (lambda (func exprs) ""))
 
-                      (pattern-rule
-                       `(set ,(? 'var) ,(? 'val))
-                       (lambda (var val) ""))
+                             (pattern-rule
+                              `(or ,(? 'args list?))
+                              (lambda (args)
+                                (let ((exit-label (or-exit)))
+                                  (string-append (string-append-list (special-map (lambda (e) (nl-string-append (code-gen e)
+                                                                                                                (>cmp r0 (>imm sob-false))
+                                                                                                                (>jne exit-label)))
+                                                                                  (lambda (e) (>nl (code-gen e)))
+                                                                                  args))
+                                                 exit-label ":"))))
 
-                      (pattern-rule
-                       `(seq ,(? 'exprs list?))
-                       (lambda (exprs) ""))
+                             (pattern-rule
+                              `(set ,(? 'var) ,(? 'val))
+                              (lambda (var val)
+                                (let ((r0->fparg ((pattern-rule
+                                                   `(pvar ,(? 'v) ,(? 'minor))
+                                                   (lambda (v minor) (>mov (>fparg 2 minor) r0))) var (lambda () (error 'code-gen (format "set: unrecognized pvar: ~s" var))))))
+                                  (string-append r0->fparg
+                                                 (>mov r0 (>imm sob-void))
+                                                 nl))))
+                             
+                             (pattern-rule
+                              `(seq ,(? 'exprs list?))
+                              (lambda (exprs)
+                                (string-append-list (map (lambda (expr) (>nl (code-gen expr))) exprs)))) ;; TODO test
 
-                      (pattern-rule
-                       `(box ,(? 'var))
-                       (lambda (var) ""))
+                             (pattern-rule
+                              `(box ,(? 'var))
+                              (lambda (var) ""))
 
-                      (pattern-rule
-                       `(box-get ,(? 'var))
-                       (lambda (var) ""))
+                             (pattern-rule
+                              `(box-get ,(? 'var))
+                              (lambda (var)
+                                (string-append (code-gen var)
+                                               (>mov r0 (>ind r0)))))
+                             
+                             (pattern-rule
+                              `(box-set ,(? 'var) ,(? 'val))
+                              (lambda (var val) ""))
+                             
+                             ) e cont))))
+                 code-gen)))))
 
-                      (pattern-rule
-                       `(box-set ,(? 'var) ,(? 'val))
-                       (lambda (var val) ""))
-                      )))
-             code-gen))))
-
-    (lambda (e fvars consts)
-      ((^run fvars consts) e (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))))))
+      (lambda (e fvars consts)
+        (((^run fvars consts) (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))) e)))))
 
 
 
 
 
 ;; _________construct-tables_______________________________________
-;; ________________________________________________________________  
+;; ________________________________________________________________
 (load "tdd-tools.scm")
 
 (define disassemble-const
@@ -2113,18 +2165,6 @@
                                          (<dit> (caddr e))
                                          (<dif> (cadddr e)))
                                      (construct-sequence-tables `(,<test> ,<dit> ,<dif>) fvars consts cont)))
-                                   #|(construct-tables-inner <test>
-                                    fvars
-                                    consts
-                                    (lambda (fvars1 consts1)
-                                      (construct-tables-inner <dit>
-                                       fvars1
-                                       consts1
-                                       (lambda (fvars2 consts2)
-                                         (construct-tables-inner <dif>
-                                          fvars2
-                                          consts2
-                                          cont)))))))|#
 
                                   ((equal? 'def p-name) (construct-tables-inner (cadr e) fvars consts cont))
 
@@ -2139,6 +2179,11 @@
                                      (construct-sequence-tables `(,<func> ,@<args>) fvars consts cont)))
 
                                   ((or (equal? 'seq p-name) (equal? 'or p-name)) (construct-sequence-tables (cadr e) fvars consts cont))
+
+                                  ((equal? 'set p-name)
+                                   (let ((<var> (cadr e))
+                                         (<val> (caddr e)))
+                                     (construct-sequence-tables `(,<var> ,<val>) fvars consts cont)))
 
                                   ((equal? 'box-set p-name) (construct-tables-inner (caddr e) fvars consts cont))
 
@@ -2169,8 +2214,8 @@ JUMP(CONTINUE);
 #include \"arch/math.lib\"
 #include \"arch/string.lib\"
 #include \"arch/system.lib\"
+#include \"arch/scheme.lib\"
 CONTINUE:
-printf(\"hello\");
 ")
 (define epilogue "
 STOP_MACHINE;
@@ -2199,6 +2244,75 @@ return 0;
      `(() ())
      pes)))
 
+(define make-print
+  (let ((prologue "\n") (epilogue (nl-string-append (>push r0)
+                                                    (>call "WRITE_SOB")
+                                                    drop1
+                                                    (>call "NEWLINE")
+                                                    drop1)))
+    (lambda (code)
+      (if (equal? code "") code (string-append prologue code epilogue)))))
+
+(define ^make-sob
+  (lambda (consts)
+    (lambda (const)
+      (nl-string-append (cond ((equal? const (void)) (>call "MAKE_SOB_VOID"))
+
+                              ((boolean? const) (string-append
+                                                 (>push (>imm (number->string (if const 1 0)))) nl
+                                                 (>call "MAKE_SOB_BOOL")))
+
+                              ((char? const)
+                               (nl-string-append
+                                (>push (>imm (string-append "'" (list->string `(,const)) "'")))
+                                (>call "MAKE_SOB_CHAR"))) ; TODO FIX
+
+                              ((procedure? const) (string-append "CALL(MAKE_SOB_CLOSURE);\n")) ; TODO
+
+                              ((integer? const) (string-append "PUSH(IMM(" (number->string const) "));\n" "CALL(MAKE_SOB_INTEGER);\n"))
+                              ((null? const) (>call "MAKE_SOB_NIL"))
+                              ((pair? const) (let ((car-index (vector-get-element-index consts (car const)))
+                                                   (cdr-index (vector-get-element-index consts (cdr const))))
+
+                                               (nl-string-append (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string cdr-index))))
+                                                                 (>push r0)
+                                                                 (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string car-index))))
+                                                                 (>push r0)
+                                                                 (>call "MAKE_SOB_PAIR"))))
+
+                              ((string? const) (string-append "CALL(MAKE_SOB_STRING);")) ; TODO
+                              ((symbol? const) (string-append "CALL(MAKE_SOB_SYMBOL);")) ; TODO
+                              ((vector? const) (string-append "CALL(MAKE_SOB_VECTOR);")) ; TODO
+                              (else (error 'make-sob: (format "cant decide type of argument: ~s" const))))
+                        drop1))))
+
+(define generate-table-code
+  (let* ((^assign-r0-to-table
+          (lambda (counter)
+            (lambda ()  ; generates lines like: "MOV(IND(table_name + counter), R0);" where counter increments
+              (let ((i (number->string (counter))))
+                (>nl (>mov (>ind (base+displ CONST_TABLE_BASE_ADDR i)) r0)))))))
+
+    (lambda (table table-start-addr table-start-addr-macro assign-to-r0)
+      (nl-string-append (>define table-start-addr-macro table-start-addr)
+                        (vector-fold-left string-append
+                                          ""
+                                          (let ((assignment-r0-to-generator (^assign-r0-to-table (^counter))))
+                                            (vector-map (lambda (code-line) (string-append code-line (assignment-r0-to-generator)))
+                                                        (vector-map assign-to-r0 table))))))))
+
+(define generate-constants-macro
+  (let ((define-c-macro
+         (lambda s
+           (string-append-list `(,"#define " ,@s "\n")))))
+    (lambda (consts)
+      (string-append
+       (define-c-macro sob-void  " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts (void))))))
+       (define-c-macro sob-nil   " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts '())))))
+       (define-c-macro sob-true  " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts #t)))))
+       (define-c-macro sob-false " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts #f)))))))))
+
+
 (define compile-scheme-file
   (lambda (source dest)
     (let* ((code-text (file->string source))
@@ -2212,18 +2326,32 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
+
            (tables (get-tables pes))
            (fvars (list->vector (car tables)))
            (consts (list->vector (cadr tables)))
-           (generated-code (fold-left string-append "" (map (lambda (pes) (code-gen pes fvars consts)) pes)))
-                                        ;(generated-code "")
+
+           (generated-code (fold-left string-append "" (map (lambda (pes) (make-print (code-gen pes fvars consts))) pes)))
+           (generated-code (string-append (generate-constants-macro consts) generated-code))
+
+           (generated-code (string-append (generate-table-code consts
+                                                               "50"
+                                                               CONST_TABLE_BASE_ADDR
+                                                               (^make-sob consts))
+                                          generated-code))
+
+           #|(generated-code (string-append (generate-table-code fvars 
+                                                               (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-length consts))) 
+                                                               FVARS_TABLE_BASE_ADDR
+                                                               id) 
+                                          generated-code))|#
+
            (generated-code (string-append prologue generated-code))
            (generated-code (string-append generated-code epilogue)))
 
       (let ((output-port (open-output-file dest)))
         (display generated-code output-port)
-        (close-output-port output-port)
-        tables))))
+        (close-output-port output-port)))))
 
 
 

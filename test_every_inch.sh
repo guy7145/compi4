@@ -27,20 +27,17 @@ inputLocation=compi4
 toolsLocation=testing-tools
 testLocation=do-not-touch
 
-echo -e $Red
 
-rm $testLocation/*
-rm -d $testLocation
+rm -rf $testLocation
+
 
 echo -e $Blue
-
 if [ ! -d $testLocation ]; then 
 	mkdir $testLocation
 fi
 cp $toolsLocation/* $testLocation
 cp $inputLocation/* $testLocation
 cd $testLocation
-
 echo -e $NC
 
 echo "_____________________________________________________________________________________________________________________________"
