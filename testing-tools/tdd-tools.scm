@@ -10,7 +10,7 @@
 (define display-colored-BIG (lambda (msg) (display (format "\033[1;36m~s\033[0m \n" msg))))
 (define display-colored-BIG-title (lambda (msg) (display (format "\033[1;36m~s:\033[0m \n" msg))))
 
-; bright colors:
+                                        ; bright colors:
 (define DarkGray (lambda() (display "\033[1;30m")))
 (define LightRed (lambda() (display "\033[1;31m")))
 (define LightGreen (lambda() (display "\033[1;32m")))
@@ -20,7 +20,7 @@
 (define LightCyan (lambda() (display "\033[1;36m")))
 (define White (lambda() (display "\033[1;37m")))
 
-; dark colors:
+                                        ; dark colors:
 (define Black (lambda() (display "\033[0;30m")))
 (define Red (lambda() (display "\033[0;31m")))
 (define Green (lambda() (display "\033[0;32m")))
@@ -94,8 +94,28 @@
         (begin (display-colored input) (display-colored-2 (parse input)) #f)
         #t)))
 
+(define get-first-line
+  (lambda (lst)
+    (if (null? lst)
+        '()
+        (let ((current (car lst))
+              (rest (cdr lst)))
+          (if (eq? #\newline current)
+              '()
+              (cons current (get-first-line rest)))))))
+
+(define get-rest-lines
+  (lambda (lst)
+    (if (null? lst) 
+        lst
+        (let ((current (car lst))
+              (rest (cdr lst)))
+          (if (eq? #\newline current)
+              rest
+              (get-first-line rest))))))
+
 (define COMPARE-FILE-CONTENTS
-  (let ((file->string
+  (let ((file->list
          (lambda (in-file)
            (let ((in-port (open-input-file in-file)))
              (letrec ((run
@@ -106,9 +126,19 @@
                                  (close-input-port in-port)
                                  '())
                                (cons ch (run)))))))
-               (list->string
-                (run)))))))
-    (lambda (file1 file2)
-      (ASSERT-EQUAL (file->string file1) (file->string file2)))))
+               (run))))))
+#|    
+    (letrec ((assertion-loop
+              (lambda (file1 file2)
+                (let ((obj1 (list->string (get-first-line file1)))
+                      (obj2 (list->string (get-first-line file2))))
+                  (if (not (and (eq? obj1 "") (eq? obj2 "")))
+                      (begin
+                        (ASSERT-EQUAL obj1 obj2)
+                        (assertion-loop (get-rest-lines file1) (get-rest-lines file2))))))))
+      |#
+      (lambda (file1 file2)
+        (let ((file1 (list->string (file->list file1))) (file2 (list->string (file->list file2))))
+          (ASSERT-EQUAL file1 file2)))))
 
 

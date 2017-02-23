@@ -5,7 +5,7 @@
         s
         (fold-left (lambda (acc el) (if (null? el) acc (cons acc el))) (car s) (cdr s)))))
 (begin 1 2 3 4 5)
-(begin (display 4) 2)
+(begin (+ 1 2))
 1
 (void)
 (list 1 2 3 4)

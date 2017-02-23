@@ -57,6 +57,9 @@ do
 	# run both languages
 	scheme --quiet < ${file%.c}.scm > ${file%.c}.out1
 	sh -c "./${file%.c}.o >${file%.c}.out2 2>${file%.c}.out2"
+	# format lists
+	sed -i "s/(/'(/" ${file%.c}.out1
+	sed -i "s/(/'(/" ${file%.c}.out2
 done
 echo ""
 
