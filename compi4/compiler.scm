@@ -2129,7 +2129,7 @@
                                                     
                                                     #| TYPE CHECK:
                                                     (>cmp (>indd R0 0) (>imm t_closure))
-                                                    (>jne "‫‪L_error_cannot_apply_non_clos‬‬")
+                                                    (>jne "L_error_cannot_apply_non_clos")
                                                     |#
                                                     
                                                     (>push (>indd R0 "1"))

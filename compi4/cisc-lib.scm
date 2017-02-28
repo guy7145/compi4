@@ -138,13 +138,13 @@
 
 (define >fparg
   (lambda (x)
-    (string-append "‫‪FPARG" (>paren (number->string x)))))
+    (string-append "FPARG" (>paren (number->string x)))))
 (define >fparg-nan
   (lambda (x)
-    (string-append "‫‪FPARG" (>paren x))))
+    (string-append "FPARG" (>paren x))))
 (define >fparg-displ
   (lambda (x disp)
-    (string-append "‫‪FPARG" (>paren (base+displ (number->string x) (number->string disp))))))
+    (string-append "FPARG" (>paren (base+displ (number->string x) (number->string disp))))))
 
 (define >malloc 
   (lambda (size)
