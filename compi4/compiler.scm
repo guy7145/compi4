@@ -1968,9 +1968,9 @@
       (let ((length (vector-length vector)))
         (iterator vector f 0 length (make-vector length))))))
 
-(define string-append-list
+#|(define string-append-list
   (lambda (list)
-    (fold-left string-append "" list)))
+    (fold-left string-append "" list)))|#
 
 
 (load "cisc-lib.scm")
@@ -1984,122 +1984,218 @@
 (define code-gen
   (let ((if3-else (label-generator "if3_else_"))
         (if3-exit (label-generator "if3_exit_"))
-        (or-exit (label-generator "or_exit_")))
+        (or-exit (label-generator "or_exit_"))
+        (lambda-body (label-generator "closure_body_"))
+        (lambda-exit (label-generator "closure_exit_")))
 
     (let ((^run
            (lambda (fvars consts)
              (lambda (cont)
                (letrec ((code-gen
-                         (lambda (e)
+                         (lambda (major e)
                            ((compose-patterns
+                             ;; change to immediate if table implementation changed:
                              (pattern-rule
                               `(const ,(? 'const))
                               (lambda (const)
                                 (let ((index (vector-get-element-index consts const)))
-                                  (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string index)))))))
+                                  (>mov r0 
+                                        ; here
+                                        ;  |
+                                        ;  V
+                                        (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string index)))
+                                        ))))
 
+                             ; TODO:
                              (pattern-rule
                               `(fvar ,(? 'v))
                               (lambda (v) ""))
 
+                             ; done!
                              (pattern-rule
                               `(pvar ,(? 'v) ,(? 'minor))
-                              (lambda (v minor) (>mov r0 (>fparg 2 minor))))
+                              (lambda (v minor) (>mov r0 (>fparg-displ 2 minor))))
 
+                             ; done!
                              (pattern-rule
                               `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
                               (lambda (v major minor)
                                 (nl-string-append
-                                 (>mov r0 (>fparg 0 0))
+                                 (>mov r0 (>fparg 0))
                                  (>mov r0 (>indd r0 major))
                                  (>mov r0 (>indd r0 minor)))))
 
+                             ; done!
                              (pattern-rule
                               `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
                               (lambda (test dit dif)
                                 (let ((else_label (if3-else))
                                       (exit_label (if3-exit)))
                                   (nl-string-append ""
-                                                    (code-gen test)
+                                                    (code-gen major test)
                                                     (>cmp r0 (>imm sob-false))
                                                     (>jmp exit_label)
-                                                    (code-gen dit)
+                                                    (code-gen major dit)
                                                     (>jmp exit_label)
                                                     (>label else_label)
-                                                    (code-gen dif)
+                                                    (code-gen major dif)
                                                     (>label exit_label)
                                                     ))))
 
+                             ; TODO:
                              (pattern-rule
                               `(def ,(? 'var-name) ,(? 'val))
                               (lambda (var-name val) ""))
 
+                             ; TODO: test
                              (pattern-rule
                               `(lambda-simple ,(? 'args list?) ,(? 'body))
                               (lambda (args body)
-                                ""))
+                                (display-colored-BIG `(lambda-simple ,args ,body))
+                                (let ((num-of-params (number->string (length args)))
+                                      (body-label (lambda-body))
+                                      (exit-label (lambda-exit)))
+                                (nl-string-append 
+                                 
+                                 (>mov R1 (>fparg 0))                              ; R1 <- env
+                                 (>mov-res R2 
+                                           (>malloc (number->string (+ 1 major)))) ; R2 <- new env (empty)
+                                 
+                                 
+                                 #| copy old enviroment to new enviroment |#
+                                 ;; for ( i = 0; i < major; i++) { body... }
+                                 (>for-loop "0" 
+                                            (number->string major) 
+                                            >inc 
+                                            >jge 
+                                            (>mov (>indd R2 (string-append loop-counter " + 1"))
+                                                  (>indd R1 loop-counter)))
+                                 (>mov R3 (>fparg 1))
+                                 (>mov-res (>indd R2 "0") (>malloc R3))
+                                 
+                                 
+                                 #| copy arguments to new enviroment |#
+                                 (>mov R0 (>indd R2 "0"))
+                                 (>for-loop "0"
+                                            R3
+                                            >inc
+                                            >jge
+                                            (>mov (>indd R0 loop-counter)
+                                                  (>fparg-nan (string-append loop-counter " + 1"))))
+                                 
+                                 #| create lambda_sob object |#
+                                 (>mov-res R0 (>malloc "3"))
+                                 (>mov (>indd R0 "0") t_closure)  ; t_closure
+                                 (>mov (>indd R0 "1") R2)         ; env
+                                 (>mov (>indd R0 "2") body-label) ; code-pointer
+                                 (>jmp exit-label)
+                                 
+                                 (>label body-label)
+                                 (>push fp)
+                                 (>mov fp sp)
+                                 
+                                 #| argument number check
+                                 (>cmp (>fparg 1) (>imm num-of-params))
+                                 (>jne "L_error_lambda_args_count")
+                                 |#
+                                 
+                                 (code-gen (+ 1 major) body)
+                                 (>pop fp)
+                                 (>ret)
+                                 (>label exit-label)
+                                 ))))
+                                
 
+                             ; TODO:
                              (pattern-rule
                               `(lambda-opt ,(? 'args list?) ,(? 'opt-arg) ,(? 'body))
                               (lambda (args opt-arg body) ""))
 
+                             ; TODO:
                              (pattern-rule
                               `(lambda-var ,(? 'arg) ,(? 'body))
                               (lambda (arg body) ""))
-
-                             (pattern-rule
+                             
+                             (pattern-rule ;; TODO: test; error check?
                               `(applic ,(? 'func) ,(? 'exprs list?))
-                              (lambda (func exprs) ""))
+                              (lambda (func exprs)
+                                (let ((num-of-args (number->string (length exprs))))
+                                  (nl-string-append (string-append-list (map (lambda (e) 
+                                                                               (nl-string-append (code-gen major e) 
+                                                                                                 (>push R0)))
+                                                                             exprs))
+                                                    (>push num-of-args)
+                                                    (code-gen major func)
+                                                    
+                                                    #| TYPE CHECK:
+                                                    (>cmp (>indd R0 0) (>imm t_closure))
+                                                    (>jne "‫‪L_error_cannot_apply_non_clos‬‬")
+                                                    |#
+                                                    
+                                                    (>push (>indd R0 "1"))
+                                                    (>call (>indd R0 "2"))
+                                                    
+                                                    (>drop "1")
+                                                    (>pop R1)
+                                                    (>drop R1)
+                                                    ))))
 
+                             ; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs) ""))
 
+                             ; done!
                              (pattern-rule
                               `(or ,(? 'args list?))
                               (lambda (args)
                                 (let ((exit-label (or-exit)))
-                                  (string-append (string-append-list (special-map (lambda (e) (nl-string-append (code-gen e)
+                                  (string-append (string-append-list (special-map (lambda (e) (nl-string-append (code-gen major e)
                                                                                                                 (>cmp r0 (>imm sob-false))
                                                                                                                 (>jne exit-label)))
-                                                                                  (lambda (e) (>nl (code-gen e)))
+                                                                                  (lambda (e) (>nl (code-gen major e)))
                                                                                   args))
                                                  exit-label ":"))))
 
+                             ; TODO: test
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
                               (lambda (var val)
                                 (let ((r0->fparg ((pattern-rule
                                                    `(pvar ,(? 'v) ,(? 'minor))
-                                                   (lambda (v minor) (>mov (>fparg 2 minor) r0))) var (lambda () (error 'code-gen (format "set: unrecognized pvar: ~s" var))))))
+                                                   (lambda (v minor) (>mov (>fparg-displ 2 minor) r0))) var (lambda () (error 'code-gen (format "set: unrecognized pvar: ~s" var))))))
                                   (string-append r0->fparg
                                                  (>mov r0 (>imm sob-void))
                                                  nl))))
-                             
+
+                             ; done!
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
                               (lambda (exprs)
-                                (string-append-list (map (lambda (expr) (>nl (code-gen expr))) exprs)))) ;; TODO test
+                                (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs)))) ;; TODO test
 
+                             ; TODO:
                              (pattern-rule
                               `(box ,(? 'var))
                               (lambda (var) ""))
 
+                             ; TODO: test
                              (pattern-rule
                               `(box-get ,(? 'var))
                               (lambda (var)
-                                (string-append (code-gen var)
+                                (string-append (code-gen major var)
                                                (>mov r0 (>ind r0)))))
-                             
+
+                             ; TODO:
                              (pattern-rule
                               `(box-set ,(? 'var) ,(? 'val))
                               (lambda (var val) ""))
-                             
+
                              ) e cont))))
                  code-gen)))))
 
       (lambda (e fvars consts)
-        (((^run fvars consts) (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))) e)))))
+        (((^run fvars consts) (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))) 0 e)))))
 
 
 

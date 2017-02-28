@@ -28,7 +28,7 @@ toolsLocation=testing-tools
 example_scm_files=scm_examples
 testLocation=do-not-touch
 
-compare_script_file="automated-compare-tests.scm" # should be same as in test-hw4.scm!
+compare_script_file="automated-compare-tests.scm" # should be same as in compile-files.scm!
 
 rm -rf $testLocation
 
@@ -58,8 +58,8 @@ do
 	scheme --quiet < ${file%.c}.scm > ${file%.c}.out1
 	sh -c "./${file%.c}.o >${file%.c}.out2 2>${file%.c}.out2"
 	# format lists
-	sed -i "s/(/'(/" ${file%.c}.out1
-	sed -i "s/(/'(/" ${file%.c}.out2
+#	sed -i "s/. (//g" ${file%.c}.out1
+#	sed -i "s/. (//g" ${file%.c}.out2
 done
 echo ""
 
