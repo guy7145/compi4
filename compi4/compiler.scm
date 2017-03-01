@@ -1978,67 +1978,91 @@
 ;; _________code-gen_______________________________________________
 ;; ________________________________________________________________ 
 
-
+(define stack-fix
+  (lambda (num-of-args)
+    (let ((accumulator R6)
+          (actual-num-of-args R5)
+          (list-stack-index (number->string (+ 2 num-of-args)))
+          (num-of-args (number->string num-of-args)))
+      (nl-string-append
+       (>mov actual-num-of-args (>fparg 1))
+       (>mov accumulator sob-nil)
+       (>for-loop actual-num-of-args
+                  num-of-args
+                  >dec
+                  >jle
+                  (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1")))))
+       (>mov (>fparg-nan list-stack-index) accumulator)))))
 
 (define lambda-code-gen
   (lambda (stack-fix body-label exit-label num-of-params body major code-gen)
-      
-      (nl-string-append
-       (>mov R1 (>fparg 0))                              ; R1 <- env
-       (>mov-res R2
-                 (>malloc (number->string (+ 1 major)))) ; R2 <- new env (empty)
 
-     #| copy old enviroment to new enviroment |#
-       ;; for ( i = 0; i < major; i++) { body... }
-       (>for-loop "0"
-                  (number->string major)
-                  >inc
-                  >jge
-                  (>mov (>indd R2 (string-append loop-counter " + 1"))
-                        (>indd R1 loop-counter)))
-       
-     #| allocate space for args in the enviroment |#
-       (>mov R3 (>fparg 1))
-       (>mov-res (>indd R2 "0") (>malloc R3))
-       
-     #| copy arguments to new enviroment |#
-       (>mov R0 (>indd R2 "0"))
-       (>for-loop "0"
-                  R3
-                  >inc
-                  >jge
-                  (>mov (>indd R0 loop-counter)
-                        (>fparg-nan (string-append loop-counter " + 1"))))
-       
-     #| create lambda_sob object |#
-       (>mov-res R0 (>malloc "3"))
-       (>mov (>indd R0 "0") t_closure)               ; t_closure
-       (>mov (>indd R0 "1") R2)                      ; env
-       (>mov (>indd R0 "2") (>get-label body-label)) ; code-pointer
-       (>jmp exit-label)
+    (nl-string-append
+     (>comment (format "lambda code-gen, body: ~s" body))
 
-       (>make-label body-label)
-       (>push fp)
-       (>mov fp sp)
+     (>mov-res R2
+               (>malloc (number->string (+ 1 major)))) ; R2 <- new env (empty)
+     (>mov R1 (>fparg 0))                              ; R1 <- old env
 
+; copy old enviroment to new enviroment
+     (>comment (format "copy old enviroment to new enviroment:"))
+     ;; for ( i = 0; i < major; i++) { body... }
+     (>for-loop "0"
+                (number->string major)
+                >inc
+                >jge
+                (>mov (>indd R2 (string-append loop-counter " + 1"))
+                      (>indd R1 loop-counter)))
 
-       stack-fix ;; <------- stack fix for lambda-opt and lambda-var
+                                        ; allocate space for args in the enviroment
+     (>comment (format "allocate space for args in the enviroment:"))
+     (>mov R3 (>fparg 1))
+     (>mov-res (>indd R2 "0") (>malloc R3))
 
-                                 #| argument number check
-                                 (>cmp (>fparg 1) (>imm num-of-params))
-                                 (>jne "L_error_lambda_args_count")
-                                 |#
+                                        ; copy arguments to new enviroment
+     (>comment (format "copy arguments to new enviroment:"))
+     (>mov R0 (>indd R2 "0"))
+     (>for-loop "0"
+                R3
+                >inc
+                >jge
+                (>mov (>indd R0 loop-counter)
+                      (>fparg-nan (string-append loop-counter " + 1"))))
 
-       (code-gen (+ 1 major) body)
-       (>pop fp)
-       (>ret)
-       (>make-label exit-label))))
+                                        ; create lambda_sob object
+     (>comment (format "create lambda_sob object:"))
+     (>mov-res R0 (>malloc "3"))
+     (>mov (>indd R0 "0") t_closure)               ; t_closure
+     (>mov (>indd R0 "1") R2)                      ; env
+     (>mov (>indd R0 "2") (>get-label body-label)) ; code-pointer
+     (>jmp exit-label)
 
 
+     (>make-label body-label)
+     (>push fp)
+     (>mov fp sp)
+
+
+     (>comment (format "stack-fix:"))
+     stack-fix ;; <------- stack fix for lambda-opt and lambda-var
+     (>comment (format "end of stack-fix"))
+
+                                        ; argument number check
+                                        ;(>cmp (>fparg 1) (>imm num-of-params))
+                                        ;(>jne "L_error_lambda_args_count")
+
+
+
+     (code-gen (+ 1 major) body)
+     (>mov sp fp)
+     (>pop fp)
+     (>ret)
+     (>make-label exit-label)
+     (>comment (format "end of lambda."))
+     )))
 
 ;; TODO:
 (define code-gen
-
   (let ((if3-else (label-generator "if3_else_"))
         (if3-exit (label-generator "if3_exit_"))
         (or-exit (label-generator "or_exit_"))
@@ -2056,12 +2080,14 @@
                               `(const ,(? 'const))
                               (lambda (const)
                                 (let ((index (vector-get-element-index consts const)))
-                                  (>mov r0
-                                        ; here
-                                        ;  |
-                                        ;  V
-                                        (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string index)))
-                                        ))))
+                                  (string-append (>comment (format "const ~s" const))
+                                                 nl
+                                                 (>mov r0
+                                                       ; here
+                                                       ;  |
+                                                       ;  V
+                                                       (>indd CONST_TABLE_BASE_ADDR (number->string index)))
+                                                 ))))
 
                                         ; TODO:
                              (pattern-rule
@@ -2070,12 +2096,14 @@
 
                              (pattern-rule
                               `(pvar ,(? 'v) ,(? 'minor))
-                              (lambda (v minor) (>mov r0 (>fparg-displ 2 minor))))
+                              (lambda (v minor) (nl-string-append (>comment (format "pvar ~s ~s" v minor))
+                                                                  (>mov r0 (>fparg-displ 2 minor)))))
 
                              (pattern-rule
                               `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
                               (lambda (v major minor)
                                 (nl-string-append
+                                 (>comment (format "bvar ~s ~s ~s" v major minor))
                                  (>mov r0 (>fparg 0))
                                  (>mov r0 (>indd r0 major))
                                  (>mov r0 (>indd r0 minor)))))
@@ -2085,7 +2113,8 @@
                               (lambda (test dit dif)
                                 (let ((else_label (if3-else))
                                       (exit_label (if3-exit)))
-                                  (nl-string-append ""
+                                  (nl-string-append (>comment (format "if3 ~s ~s ~s" test dit dif))
+                                                    ""
                                                     (code-gen major test)
                                                     (>cmp r0 (>imm sob-false))
                                                     (>jmp exit_label)
@@ -2105,32 +2134,60 @@
                              (pattern-rule
                               `(lambda-simple ,(? 'args list?) ,(? 'body))
                               (lambda (args body)
-                                (display-colored-BIG `(lambda-simple ,args ,body))
                                 (let ((num-of-params (number->string (length args)))
                                       (body-label (lambda-body))
                                       (exit-label (lambda-exit)))
-                                  (lambda-code-gen "" body-label exit-label num-of-params body major code-gen))))
+                                  (lambda-code-gen ""
+                                                   body-label
+                                                   exit-label
+                                                   num-of-params
+                                                   body
+                                                   major
+                                                   code-gen))))
 
 
                                         ; TODO:
                              (pattern-rule
                               `(lambda-opt ,(? 'args list?) ,(? 'opt-arg) ,(? 'body))
-                              (lambda (args opt-arg body) ""))
+                              (lambda (args opt-arg body)
+                                (let ((num-of-params (length args))
+                                      (body-label (lambda-body))
+                                      (exit-label (lambda-exit)))
+                                  (lambda-code-gen (stack-fix num-of-params)
+                                                   body-label
+                                                   exit-label
+                                                   num-of-params
+                                                   body
+                                                   major
+                                                   code-gen))))
+
 
                                         ; TODO:
                              (pattern-rule
                               `(lambda-var ,(? 'arg) ,(? 'body))
-                              (lambda (arg body) ""))
+                              (lambda (arg body)
+                                (let ((num-of-params 0)
+                                      (body-label (lambda-body))
+                                      (exit-label (lambda-exit)))
+                                  (lambda-code-gen (stack-fix num-of-params)
+                                                   body-label
+                                                   exit-label
+                                                   num-of-params
+                                                   body
+                                                   major
+                                                   code-gen))))
 
                              (pattern-rule ;; TODO: test; error check?
                               `(applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
-                                  (nl-string-append (string-append-list (map (lambda (e)
-                                                                               (nl-string-append (code-gen major e)
-                                                                                                 (>push R0)))
-                                                                             exprs))
+                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
+                                                    ;(>push "0") ;; for var and opt support
+                                                    (string-append-list
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
                                                     (>push num-of-args)
                                                     (code-gen major func)
 
@@ -2141,10 +2198,11 @@
 
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
-
                                                     (>drop "1")
+
                                                     (>pop R1)
                                                     (>drop R1)
+                                                    ;(>drop "1") ;; for the (>push "0") earlier
                                                     ))))
 
                                         ; TODO:
@@ -2156,7 +2214,9 @@
                               `(or ,(? 'args list?))
                               (lambda (args)
                                 (let ((exit-label (or-exit)))
-                                  (string-append (string-append-list (special-map (lambda (e) (nl-string-append (code-gen major e)
+                                  (string-append (>comment (format "or ~s" args))
+                                                 nl
+                                                 (string-append-list (special-map (lambda (e) (nl-string-append (code-gen major e)
                                                                                                                 (>cmp r0 (>imm sob-false))
                                                                                                                 (>jne exit-label)))
                                                                                   (lambda (e) (>nl (code-gen major e)))
@@ -2170,7 +2230,9 @@
                                 (let ((r0->fparg ((pattern-rule
                                                    `(pvar ,(? 'v) ,(? 'minor))
                                                    (lambda (v minor) (>mov (>fparg-displ 2 minor) r0))) var (lambda () (error 'code-gen (format "set: unrecognized pvar: ~s" var))))))
-                                  (string-append r0->fparg
+                                  (string-append (>comment (format "set ~s ~s" var val))
+                                                 nl
+                                                 r0->fparg
                                                  (>mov r0 (>imm sob-void))
                                                  nl))))
 
@@ -2188,7 +2250,9 @@
                              (pattern-rule
                               `(box-get ,(? 'var))
                               (lambda (var)
-                                (string-append (code-gen major var)
+                                (string-append (>comment (format "box-get ~s" var))
+                                               nl
+                                               (code-gen major var)
                                                (>mov r0 (>ind r0)))))
 
                                         ; TODO:
@@ -2299,31 +2363,6 @@
 ;; _________compile-scheme-file____________________________________
 ;; ________________________________________________________________ 
 
-(define prologue "
-/* change to 0 for no debug info to be printed: */
-#define DO_SHOW 1
-
-#include <stdio.h>
-#include <stdlib.h>
-#include \"arch/cisc.h\"
-
-int main() {
-START_MACHINE;
-JUMP(CONTINUE);
-#include \"arch/char.lib\"
-#include \"arch/io.lib\"
-#include \"arch/math.lib\"
-#include \"arch/string.lib\"
-#include \"arch/system.lib\"
-#include \"arch/scheme.lib\"
-CONTINUE:
-")
-(define epilogue "
-STOP_MACHINE;
-return 0; 
-}
-")
-
 (define list->sexpr
   (lambda (list fail-cont)
     (<sexpr> list
@@ -2345,60 +2384,71 @@ return 0;
      `(() ())
      pes)))
 
-(define make-print
-  (let ((prologue "\n") (epilogue (nl-string-append (>push r0)
-                                                    (>call "WRITE_SOB")
-                                                    drop1
-                                                    (>call "NEWLINE")
-                                                    drop1)))
-    (lambda (code)
-      (if (equal? code "") code (string-append prologue code epilogue)))))
-
 (define ^make-sob
   (lambda (consts)
     (lambda (const)
-      (nl-string-append (cond ((equal? const (void)) (>call "MAKE_SOB_VOID"))
+      (string-append nl
+                     (>comment (format "Make-SOB: ~s" const))
+                     nl
+                     (cond ((equal? const (void)) (>call "MAKE_SOB_VOID"))
 
-                              ((boolean? const) (string-append
-                                                 (>push (>imm (number->string (if const 1 0)))) nl
-                                                 (>call "MAKE_SOB_BOOL")))
+                           ((boolean? const) (nl-string-append
+                                              (>push (>imm (number->string (if const 1 0))))
+                                              (>call "MAKE_SOB_BOOL")
+                                              (>drop "1")
+                                              ))
 
-                              ((char? const)
-                               (nl-string-append
-                                (>push (>imm (string-append "'" (list->string `(,const)) "'")))
-                                (>call "MAKE_SOB_CHAR"))) ; TODO FIX
+                           ((char? const) (nl-string-append
+                                           (>push (>imm (string-append "'" (list->string `(,const)) "'")))
+                                           (>call "MAKE_SOB_CHAR")
+                                           (>drop "1")
+                                           ))
 
-                              ((procedure? const) (string-append "CALL(MAKE_SOB_CLOSURE);\n")) ; TODO
+                           ((procedure? const) (string-append "CALL(MAKE_SOB_CLOSURE);\n")) ; TODO
 
-                              ((integer? const) (string-append "PUSH(IMM(" (number->string const) "));\n" "CALL(MAKE_SOB_INTEGER);\n"))
-                              ((null? const) (>call "MAKE_SOB_NIL"))
-                              ((pair? const) (let ((car-index (vector-get-element-index consts (car const)))
-                                                   (cdr-index (vector-get-element-index consts (cdr const))))
+                           ((integer? const) (nl-string-append
+                                              (>push (>imm (number->string const)))
+                                              (>call "MAKE_SOB_INTEGER")))
 
-                                               (nl-string-append (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string cdr-index))))
-                                                                 (>push r0)
-                                                                 (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string car-index))))
-                                                                 (>push r0)
-                                                                 (>call "MAKE_SOB_PAIR"))))
+                           ((null? const) (>call "MAKE_SOB_NIL"))
 
-                              ((string? const)
-                               (let ((str-length (string-length const))
-                                     (chars (string->list const)))
-                                 (nl-string-append (string-append-list (map (lambda (char) (>push (list->string (list #\' char #\')))) chars))
-                                                   (>push (>imm (number->string str-length)))
-                                                   (>call "MAKE_SOB_STRING"))))
+                           ((pair? const) (let ((car-index (vector-get-element-index consts (car const)))
+                                                (cdr-index (vector-get-element-index consts (cdr const))))
 
-                              ((symbol? const) (string-append "CALL(MAKE_SOB_SYMBOL);")) ; TODO
-                              ((vector? const) (string-append "CALL(MAKE_SOB_VECTOR);")) ; TODO
-                              (else (error 'make-sob: (format "cant decide type of argument: ~s" const))))
-                        drop1))))
+                                            (nl-string-append (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string cdr-index))))
+                                                              (>push r0)
+                                                              (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string car-index))))
+                                                              (>push r0)
+                                                              (>call "MAKE_SOB_PAIR")
+                                                              (>drop "2")
+                                                              )))
+
+                           ((string? const)
+                            (let ((str-length (string-length const))
+                                  (chars (string->list const)))
+                              (string-append (string-append-list
+                                              (map (lambda (char)
+                                                     (>nl (>push (list->string (list #\' char #\')))))
+                                                   chars))
+                                             (>push (>imm (number->string str-length)))
+                                             nl
+                                             (>call "MAKE_SOB_STRING")
+                                             nl
+                                             (>drop (number->string (+ 1 str-length)))
+                                             nl
+                                             )))
+
+                           ((symbol? const) (string-append "CALL(MAKE_SOB_SYMBOL);")) ; TODO
+                           ((vector? const) (string-append "CALL(MAKE_SOB_VECTOR);")) ; TODO
+                           (else (error 'make-sob: (format "cant decide type of argument: ~s" const))))
+                     ))))
 
 (define generate-table-code
   (let* ((^assign-r0-to-table
           (lambda (counter)
             (lambda ()  ; generates lines like: "MOV(IND(table_name + counter), R0);" where counter increments
               (let ((i (number->string (counter))))
-                (>nl (>mov (>ind (base+displ CONST_TABLE_BASE_ADDR i)) r0)))))))
+                (>nl (>mov (>indd CONST_TABLE_BASE_ADDR i) r0)))))))
 
     (lambda (table table-start-addr table-start-addr-macro assign-to-r0)
       (nl-string-append (>define table-start-addr-macro table-start-addr)
@@ -2408,17 +2458,67 @@ return 0;
                                             (vector-map (lambda (code-line) (string-append code-line (assignment-r0-to-generator)))
                                                         (vector-map assign-to-r0 table))))))))
 
-(define generate-constants-macro
-  (let ((define-c-macro
-         (lambda s
-           (string-append-list `(,"#define " ,@s "\n")))))
-    (lambda (consts)
-      (string-append
-       (define-c-macro sob-void  " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts (void))))))
-       (define-c-macro sob-nil   " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts '())))))
-       (define-c-macro sob-true  " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts #t)))))
-       (define-c-macro sob-false " " (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts #f)))))))))
 
+
+
+
+
+
+
+;;;; generates code for the constants: sob-void sob-nil sob-true sob-false
+;; 
+(define generate-constants-macro
+    (lambda (consts)
+      (nl-string-append (>define sob-void  (>indd CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts (void)))))
+                        (>define sob-nil   (>indd CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts '()))))
+                        (>define sob-true  (>indd CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts #t))))
+                        (>define sob-false (>indd CONST_TABLE_BASE_ADDR (number->string (vector-get-element-index consts #f)))))))
+
+
+;;;; generates print lines
+;; 
+(define make-print
+  (let ((prologue "\n") (epilogue (nl-string-append ; "INFO"
+                                                    ; "SHOW(\"SP\", SP);"
+                                                    (>push r0)
+                                                    (>call "WRITE_SOB")
+                                                    (>drop "1")
+                                                    (>call "NEWLINE"))))
+    (lambda (code)
+      (if (equal? code "") code (string-append prologue code epilogue)))))
+
+
+
+;;;; final interface for compiling files from Scheme to C 
+;;
+;; 
+(define prologue "
+/* change to 0 for no debug info to be printed: */
+#define DO_SHOW 1
+
+#include \"arch/debug_macros.h.c\"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include \"arch/cisc.h\"
+
+int main() {
+START_MACHINE;
+JUMP(CONTINUE);
+#include \"arch/char.lib\"
+#include \"arch/io.lib\"
+#include \"arch/math.lib\"
+#include \"arch/string.lib\"
+#include \"arch/system.lib\"
+#include \"arch/scheme.lib\"
+CONTINUE:
+")
+
+(define epilogue "
+STOP_MACHINE;
+return 0; 
+}
+")
 
 (define compile-scheme-file
   (lambda (source dest)
@@ -2442,7 +2542,7 @@ return 0;
            (generated-code (string-append (generate-constants-macro consts) generated-code))
 
            (generated-code (string-append (generate-table-code consts
-                                                               "50"
+                                                               "1000" ; actual const table address
                                                                CONST_TABLE_BASE_ADDR
                                                                (^make-sob consts))
                                           generated-code))

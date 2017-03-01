@@ -13,6 +13,12 @@
     (string-append-list x)))
 |#
 
+(define DEBUG-PRINT
+  (lambda (obj)
+    (nl-string-append (>push obj)
+                      (>call "WRITE_SOB")
+                      drop1
+                      (>call "NEWLINE"))))
 
 ;; registers
 (define register-generator (label-generator "R"))
@@ -124,6 +130,9 @@
 (define >jge
   (lambda (label)
     (>func "JUMP_GE" label)))
+(define >jle
+  (lambda (label)
+    (>func "JUMP_LE" label)))
 
 ;; labels
 (define >make-label
@@ -153,12 +162,18 @@
   (lambda (x disp)
     (string-append "FPARG" (>paren (base+displ (number->string x) (number->string disp))))))
 
-(define >malloc 
+(define >malloc
   (lambda (size)
     (nl-string-append (>push size)
                       (>call "MALLOC")
                       (>drop "1"))))
-    
+(define >cons
+  (lambda (a b)
+    (nl-string-append (>push a)
+                      (>push b)
+                      (>call "MAKE_SOB_PAIR")
+                      (>drop "2"))))
+
 (define >inc (lambda (x) (>func "INCR" x)))
 (define >dec (lambda (x) (>func "DECR" x)))
 
@@ -172,16 +187,18 @@
     (let ((loop-head-label (LOOP-HEAD-LABEL))
           (loop-exit-label (LOOP-EXIT-LABEL))
           (body (string-append-list body)))
-
       (nl-string-append (>mov loop-counter start)
                         (>make-label loop-head-label)
                         (>cmp loop-counter end)
                         (cond-jump loop-exit-label)
+                        body
                         (++ loop-counter)
                         (>jmp loop-head-label)
                         (>make-label loop-exit-label)))))
 
-
+(define >comment
+  (lambda (x)
+    (string-append "/* " x " */")))
 
 
 
