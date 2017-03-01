@@ -53,6 +53,16 @@
 
 
 ;; types
+;; 
+(define t_void "T_VOID")
+(define t_nil "T_NIL")
+(define t_bool "T_BOOL")
+(define t_char "T_CHAR")
+(define t_integer "T_INTEGER")
+(define t_string "T_STRING")
+(define t_symbol "T_SYMBOL")
+(define t_pair "T_PAIR")
+(define t_vector "T_VECTOR")
 (define t_closure "T_CLOSURE")
 
 

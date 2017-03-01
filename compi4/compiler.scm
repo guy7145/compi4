@@ -2384,81 +2384,50 @@
      `(() ())
      pes)))
 
-(define ^make-sob
-  (lambda (consts)
-    (lambda (const)
-      (string-append nl
-                     (>comment (format "Make-SOB: ~s" const))
-                     nl
-                     (cond ((equal? const (void)) (>call "MAKE_SOB_VOID"))
 
-                           ((boolean? const) (nl-string-append
-                                              (>push (>imm (number->string (if const 1 0))))
-                                              (>call "MAKE_SOB_BOOL")
-                                              (>drop "1")
-                                              ))
+(define get-const-address
+  (lambda (const-table const)
+    0))
 
-                           ((char? const) (nl-string-append
-                                           (>push (>imm (string-append "'" (list->string `(,const)) "'")))
-                                           (>call "MAKE_SOB_CHAR")
-                                           (>drop "1")
-                                           ))
+(define encode-const-table
+  (lambda (base-addr table)
+    (let* ((counter (^counter))
+           (encode
+            (lambda (val)
+              (>nl (>mov (>indd base-addr (counter)) val)))))
+      (string-append-list (map (lambda (const)
+                                 (cond ((equal? const (void)) (encode t_void))
+                                       
+                                       ((null? const) (encode t_nil))
+                                       
+                                       ((boolean? const) (nl-string-append (encode t_bool)
+                                                                           (encode (>imm (number->string (if const 1 0))))))
+                                       
+                                       ((char? const) (nl-string-append (encode t_char) 
+                                                                        (encode (string-append "'" (list->string `(,const)) "'"))))
+                                       
+                                       ((integer? const) (nl-string-append (encode t_integer)
+                                                                           (encode (>imm (number->string const)))))
+                                       
+                                       ((pair? const) (let ((car-index (get-const-address consts (car const)))
+                                                            (cdr-index (get-const-address consts (cdr const))))
+                                                        (nl-string-append (encode t_pair)
+                                                                          (encode (>imm (number->string car-index)))
+                                                                          (encode (>imm (number->string cdr-index))))))
 
-                           ((procedure? const) (string-append "CALL(MAKE_SOB_CLOSURE);\n")) ; TODO
+                                       ((string? const)
+                                        (nl-string-append (encode t_string)
+                                                          (encode (>imm (string-length const)))
+                                                          (string-append-list
+                                                          (map (lambda (char)
+                                                                 (>nl (encode (list->string (list #\' char #\')))))
+                                                               (string->list const)))))
 
-                           ((integer? const) (nl-string-append
-                                              (>push (>imm (number->string const)))
-                                              (>call "MAKE_SOB_INTEGER")))
-
-                           ((null? const) (>call "MAKE_SOB_NIL"))
-
-                           ((pair? const) (let ((car-index (vector-get-element-index consts (car const)))
-                                                (cdr-index (vector-get-element-index consts (cdr const))))
-
-                                            (nl-string-append (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string cdr-index))))
-                                                              (>push r0)
-                                                              (>mov r0 (>ind (base+displ CONST_TABLE_BASE_ADDR (number->string car-index))))
-                                                              (>push r0)
-                                                              (>call "MAKE_SOB_PAIR")
-                                                              (>drop "2")
-                                                              )))
-
-                           ((string? const)
-                            (let ((str-length (string-length const))
-                                  (chars (string->list const)))
-                              (string-append (string-append-list
-                                              (map (lambda (char)
-                                                     (>nl (>push (list->string (list #\' char #\')))))
-                                                   chars))
-                                             (>push (>imm (number->string str-length)))
-                                             nl
-                                             (>call "MAKE_SOB_STRING")
-                                             nl
-                                             (>drop (number->string (+ 1 str-length)))
-                                             nl
-                                             )))
-
-                           ((symbol? const) (string-append "CALL(MAKE_SOB_SYMBOL);")) ; TODO
-                           ((vector? const) (string-append "CALL(MAKE_SOB_VECTOR);")) ; TODO
-                           (else (error 'make-sob: (format "cant decide type of argument: ~s" const))))
-                     ))))
-
-(define generate-table-code
-  (let* ((^assign-r0-to-table
-          (lambda (counter)
-            (lambda ()  ; generates lines like: "MOV(IND(table_name + counter), R0);" where counter increments
-              (let ((i (number->string (counter))))
-                (>nl (>mov (>indd CONST_TABLE_BASE_ADDR i) r0)))))))
-
-    (lambda (table table-start-addr table-start-addr-macro assign-to-r0)
-      (nl-string-append (>define table-start-addr-macro table-start-addr)
-                        (vector-fold-left string-append
-                                          ""
-                                          (let ((assignment-r0-to-generator (^assign-r0-to-table (^counter))))
-                                            (vector-map (lambda (code-line) (string-append code-line (assignment-r0-to-generator)))
-                                                        (vector-map assign-to-r0 table))))))))
-
-
+                                       ((symbol? const) "")
+                                       ((vector? const) "")
+                                       ((procedure? const) "")
+                                       (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const)))))
+                               table)))))
 
 
 
@@ -2541,12 +2510,16 @@ return 0;
            (generated-code (fold-left string-append "" (map (lambda (pes) (make-print (code-gen pes fvars consts))) pes)))
            (generated-code (string-append (generate-constants-macro consts) generated-code))
 
-           (generated-code (string-append (generate-table-code consts
+           (generated-code (string-append (>define CONST_TABLE_BASE_ADDR "1000")
+                                          (encode-const-table CONST_TABLE_BASE_ADDR consts)
+                                          generated-code))
+           
+#|           (generated-code (string-append (generate-table-code consts
                                                                "1000" ; actual const table address
                                                                CONST_TABLE_BASE_ADDR
                                                                (^make-sob consts))
                                           generated-code))
-
+|#
            #|(generated-code (string-append (generate-table-code fvars 
                                                                (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-length consts))) 
                                                                FVARS_TABLE_BASE_ADDR
