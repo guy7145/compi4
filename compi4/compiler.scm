@@ -2075,18 +2075,14 @@
                (letrec ((code-gen
                          (lambda (major e)
                            ((compose-patterns
-                             ;; change to immediate if table implementation changed:
+                             
                              (pattern-rule
                               `(const ,(? 'const))
                               (lambda (const)
                                 (let ((index (vector-get-element-index consts const)))
                                   (string-append (>comment (format "const ~s" const))
                                                  nl
-                                                 (>mov r0
-                                                       ; here
-                                                       ;  |
-                                                       ;  V
-                                                       (>indd CONST_TABLE_BASE_ADDR (number->string index)))
+                                                 (>mov r0 (>imm CONST_TABLE_BASE_ADDR (number->string index)))
                                                  ))))
 
                                         ; TODO:
@@ -2318,7 +2314,7 @@
                                                              (disassemble-const (cadr e))))))
 
                                   ((equal? 'fvar p-name) (cont `(,@fvars ,(cadr e)) consts))
-
+                            
                                   ((or (equal? 'pvar p-name)
                                        (equal? 'bvar p-name)
                                        (equal? 'box p-name)
@@ -2385,32 +2381,57 @@
      pes)))
 
 
-(define get-const-address
-  (lambda (const-table const)
-    0))
-
+#|
+(define ^advanced-counter
+  (lambda ()
+    (let ((counter -1))
+      (lambda () (set! counter (+ 1 counter)) counter))))
+|#
 (define encode-const-table
   (lambda (base-addr table)
-    (let* ((counter (^counter))
-           (encode
-            (lambda (val)
-              (>nl (>mov (>indd base-addr (counter)) val)))))
+    (letrec ((indexed-table
+              (let ((offset 0))
+                (map (lambda (const)
+                       (let ((old-offset offset))
+                         (set! offset (+ offset (cond ((equal? const (void)) 1)
+                                                      ((null? const)         1)
+                                                      ((boolean? const)      2)
+                                                      ((char? const)         2)
+                                                      ((integer? const)      2)
+                                                      ((pair? const)         3)
+                                                      ((string? const) (+ 2 (string-length const)))
+                                                      ((symbol? const) '???)
+                                                      ((vector? const) (+ 2 (vector-length const)))
+                                                      ((procedure? const)    3)
+                                                      (else (error 'encode-const-table_offset: (format "cant decide type of argument: ~s" const))))))
+                         (cons old-offset const)))
+                     table)))
+             (get-const-offset
+              (let ((get-offset car) (get-const cdr))
+                (lambda (indexed-table const)
+                  (cond ((null? indexed-table) "ERROR_CONST_NOT_FOUND_IN_TABLE (encode-const-table)")
+                        ((eq? (get-const (car indexed-table)) const) (get-offset (car indexed-table)))
+                        (else (get-const-offset (cdr indexed-table)))))))
+             (counter (^counter))
+             (encode
+              (lambda (val)
+                (>nl (>mov (>indd base-addr (counter)) val)))))
       (string-append-list (map (lambda (const)
                                  (cond ((equal? const (void)) (encode t_void))
-                                       
+
                                        ((null? const) (encode t_nil))
-                                       
+
                                        ((boolean? const) (nl-string-append (encode t_bool)
                                                                            (encode (>imm (number->string (if const 1 0))))))
-                                       
-                                       ((char? const) (nl-string-append (encode t_char) 
+
+                                       ((char? const) (nl-string-append (encode t_char)
                                                                         (encode (string-append "'" (list->string `(,const)) "'"))))
-                                       
+
                                        ((integer? const) (nl-string-append (encode t_integer)
                                                                            (encode (>imm (number->string const)))))
-                                       
-                                       ((pair? const) (let ((car-index (get-const-address consts (car const)))
-                                                            (cdr-index (get-const-address consts (cdr const))))
+
+                                       ((pair? const) (let ((car-index (get-const-offset indexed-table (car const)))
+                                                            (cdr-index (get-const-offset indexed-table (cdr const))))
                                                         (nl-string-append (encode t_pair)
                                                                           (encode (>imm (number->string car-index)))
                                                                           (encode (>imm (number->string cdr-index))))))
@@ -2419,9 +2440,9 @@
                                         (nl-string-append (encode t_string)
                                                           (encode (>imm (string-length const)))
                                                           (string-append-list
-                                                          (map (lambda (char)
-                                                                 (>nl (encode (list->string (list #\' char #\')))))
-                                                               (string->list const)))))
+                                                           (map (lambda (char)
+                                                                  (>nl (encode (list->string (list #\' char #\')))))
+                                                                (string->list const)))))
 
                                        ((symbol? const) "")
                                        ((vector? const) "")
