@@ -3,7 +3,7 @@
 
 (define compile-and-make-comparison-script
   (let ((compare-script-file "automated-compare-tests.scm")
-        (filenames (list "numbers-and-booleans" "if-test" "or-tests" "lambda-simple-and-applic")) ; "cse-example" "simple-example"
+        (filenames (list "numbers-and-booleans" "if-test" "or-tests" "lambda-simple-and-applic" "lambda-var" "lambda-opt")) ; "cse-example" "simple-example"
         (prologue "
 (load \"tdd-tools.scm\")
 (display-colored-BIG 'Automated-compare-tests:)

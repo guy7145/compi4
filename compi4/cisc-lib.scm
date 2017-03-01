@@ -5,12 +5,13 @@
 (define string-append-list
   (lambda (list)
     (fold-left string-append "" list)))
-
+#|
 ;; for debugging purposes ONLY!!!
 (define string-append
   (lambda x
     (display-green x)
     (string-append-list x)))
+|#
 
 
 ;; registers
@@ -82,6 +83,9 @@
 (define >call
   (lambda (x)
     (>func "CALL" x)))
+(define >calla
+  (lambda (x)
+    (>func "CALLA" x)))
 (define >ret (lambda () "RETURN"))
 
 ;; addressing modes
@@ -122,9 +126,12 @@
     (>func "JUMP_GE" label)))
 
 ;; labels
-(define >label
+(define >make-label
   (lambda (l)
     (string-append l ":")))
+(define >get-label
+  (lambda (l)
+    (string-append "LABEL" (>paren l))))
 
 
 (define base+displ
@@ -167,12 +174,12 @@
           (body (string-append-list body)))
 
       (nl-string-append (>mov loop-counter start)
-                        (>label loop-head-label)
+                        (>make-label loop-head-label)
                         (>cmp loop-counter end)
                         (cond-jump loop-exit-label)
                         (++ loop-counter)
                         (>jmp loop-head-label)
-                        (>label loop-exit-label)))))
+                        (>make-label loop-exit-label)))))
 
 
 
