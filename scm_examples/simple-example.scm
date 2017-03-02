@@ -1,9 +1,9 @@
-(define original-list list)
-(define list
-  (lambda s
-    (if (null? s) 
-        s
-        (fold-left (lambda (acc el) (if (null? el) acc (cons acc el))) (car s) (cdr s)))))
+;(define original-list list)
+;(define list
+;  (lambda s
+;    (if (null? s) 
+;        s
+;        (fold-left (lambda (acc el) (if (null? el) acc (cons acc el))) (car s) (cdr s)))))
 (begin 1 2 3 4 5)
 (begin (+ 1 2))
 1

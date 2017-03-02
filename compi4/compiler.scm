@@ -2303,6 +2303,9 @@
                       (if (not (list? e))
                           (error 'construct-tables-inner (format "e is not a list: ~s" e))
                           (let ((p-name (car e)))
+                            (display-normal consts)
+                            (display-colored-BIG e)
+                            (display-colored p-name)
                             (cond ((equal? 'const p-name)
                                    (cont fvars `(,@consts ,@(sort
                                                              (lambda (e1 e2) (cond ((and (list? e1)
@@ -2372,22 +2375,21 @@
 
 (define get-tables
   (lambda (pes)
-    (fold-left
-     (lambda (acc e)
-       (let ((tables (construct-tables e)))
-         `(,(list->set (append (car acc) (car tables)))
-           ,(list->set (append (cadr acc) (cadr tables))))))
-     `(() ())
-     pes)))
+    (let ((res (fold-left
+                (lambda (acc e)
+                  (let ((tables (construct-tables e)))
+                    `(,(list->set (append (car acc) (car tables)))
+                      ,(list->set (append (cadr acc) (cadr tables))))))
+                `(() ())
+                pes)))
+      (display-colored (cadr res))
+      res)))
 
 (define get-const-offset
               (let ((get-offset car) (get-const cdr))
                 (lambda (indexed-table const)
-                  (cond ((null? indexed-table) "ERROR_CONST_NOT_FOUND_IN_TABLE (encode-const-table)")
-                        ((eq? (get-const (car indexed-table)) const)
-                         (begin 
-                           ;(display-colored-BIG (format "const ~s is at ~s" const (get-offset (car indexed-table))))
-                         (get-offset (car indexed-table))))
+                  (cond ((null? indexed-table) (format "ERROR_CONST_NOT_FOUND_IN_TABLE (encode-const-table): ~s" const))
+                        ((equal? (get-const (car indexed-table)) const) (get-offset (car indexed-table)))
                         (else (get-const-offset (cdr indexed-table) const))))))
 
 (define create-const-table-indexes
@@ -2433,8 +2435,8 @@
 
                                        ((pair? const) (let ((car-index (number->string (get-const-offset indexed-table (car const))))
                                                             (cdr-index (number->string (get-const-offset indexed-table (cdr const)))))
-                                                        (nl-string-append (encode (>imm (number->string cdr-index)))
-                                                                          (encode (>imm (number->string car-index)))
+                                                        (nl-string-append (encode (>imm cdr-index))
+                                                                          (encode (>imm car-index))
                                                                           (encode t_pair))))
 
                                        ((string? const)
@@ -2445,9 +2447,13 @@
                                                           (encode (>imm (number->string (string-length const))))
                                                           (encode t_string)))
 
-                                       ((symbol? const) "")
-                                       ((vector? const) "")
-                                       ((procedure? const) "")
+                                       ((symbol? const) "") ; TODO:
+                                       ((vector? const) (nl-string-append (map (lambda (el) 
+                                                                                 (encode (>imm (number->string (get-const-offset indexed-table el)))))
+                                                                                 (vector->list const))
+                                                                          (encode (vector-length const))
+                                                                          (encode t_vector)))
+                                       ((procedure? const) "") ; TODO:
                                        (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const)))))
                                (vector->list table)))))))
 
