@@ -2225,6 +2225,7 @@
                                                  exit-label ":"))))
 
                              ;; TODO: test
+                             ;; TODO: fix (fvar, bvar)
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
                               (lambda (var val)
@@ -2236,7 +2237,7 @@
                                                  r0->fparg
                                                  (>mov r0 (>imm sob-void))
                                                  nl))))
-
+                             
                              ;; TODO test
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
@@ -2256,7 +2257,7 @@
                                                nl
                                                (code-gen major var)
                                                (>mov r0 (>ind r0)))))
-
+                             
                              ;; TODO:
                              (pattern-rule
                               `(box-set ,(? 'var) ,(? 'val))
@@ -2581,6 +2582,8 @@ return 0;
 
            (tables (get-tables pes))
            (fvars (list->vector (collect-defined-fvars pes)))
+           ;; TODO: fvars-table-length might change when we add assembly library functions
+           (fvars-table-length (number->string (vector-length fvars)))
            (consts (list->vector (cadr tables)))
            
            (consts-table-n-length (create-const-table-indexes consts))
@@ -2590,12 +2593,15 @@ return 0;
            
            (generated-code (fold-left string-append "" (map (lambda (pes) (make-print (code-gen pes fvars inedxed-const-table))) pes)))
            (generated-code (string-append (generate-constants-macro inedxed-const-table) generated-code))
-
-           (generated-code (string-append (>nl (>define CONST_TABLE_BASE_ADDR "1000"))
+           
+           (generated-code (string-append (>nl (>define CONST_TABLE_BASE_ADDR CONST_TABLE_ACTUAL_ADDRESS))
                                           (encode-const-table CONST_TABLE_BASE_ADDR consts inedxed-const-table)
                                           generated-code))
            
            (generated-code (string-append (>nl (>define FVARS_TABLE_BASE_ADDR (base+displ CONST_TABLE_BASE_ADDR const-table-length)))
+                                          generated-code))
+           
+           (generated-code (string-append (>nl (>define SYMBOL_TABLE_BASE_ADDR (base+displ FVARS_TABLE_BASE_ADDR fvars-table-length)))
                                           generated-code))
            
            #|
@@ -2614,7 +2620,6 @@ return 0;
 
            (generated-code (string-append prologue generated-code))
            (generated-code (string-append generated-code epilogue)))
-      ;(display-colored-BIG fvars)
       
       (let ((output-port (open-output-file dest)))
         (display generated-code output-port)
