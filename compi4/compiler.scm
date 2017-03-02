@@ -2091,7 +2091,7 @@
                                 (let ((index (search-fvar-index-by-name fvars v)))
                                   (string-append (>comment (format "fvar ~s" v))
                                                  nl
-                                                 (>mov r0 (>imm (base+displ FVARS_TABLE_BASE_ADDR (number->string index))))))))
+                                                 (>mov r0 (>ind (base+displ FVARS_TABLE_BASE_ADDR (number->string index))))))))
 
                              (pattern-rule
                               `(pvar ,(? 'v) ,(? 'minor))
@@ -2347,7 +2347,7 @@
                                          (<dif> (cadddr e)))
                                      (construct-sequence-tables `(,<test> ,<dit> ,<dif>) fvars consts cont)))
 
-                                  ((equal? 'def p-name) (display-colored-BIG (caddr e)) (construct-tables-inner (caddr e) fvars consts cont))
+                                  ((equal? 'def p-name) (construct-tables-inner (caddr e) fvars consts cont))
 
                                   ((equal? 'lambda-simple p-name) (construct-tables-inner (caddr e) fvars consts cont))
                                   ((equal? 'lambda-opt p-name) (construct-tables-inner (cadddr e) fvars consts cont))
@@ -2426,7 +2426,6 @@
 (define get-const-offset
               (let ((get-offset car) (get-const cdr))
                 (lambda (indexed-table const)
-                  (display-colored (format "~s <-- ~s" const indexed-table))
                   (cond ((null? indexed-table) (format "ERROR_CONST_NOT_FOUND_IN_TABLE (get-const-offset): ~s" const))
                         ((equal? (get-const (car indexed-table)) const) (get-offset (car indexed-table)))
                         (else (get-const-offset (cdr indexed-table) const))))))
@@ -2519,17 +2518,17 @@
 ;; 
 (define make-print
   (let* ((^skip-label (label-generator "skip_print_"))
-         (prologue "\n") 
-         (epilogue (lambda (skip-label) (nl-string-append ; "INFO"
-                                                    ; "SHOW(\"SP\", SP);"
-                                                    (>cmp r0 sob-void)
-                                                    (>jeq skip-label)
-                                                    (>push r0)
-                                                    (>call "WRITE_SOB")
-                                                    (>drop "1")
-                                                    (>call "NEWLINE")
-                                                    (>make-label skip-label)
-                                                    ))))
+         (prologue "\n")
+         (epilogue (lambda (skip-label) (nl-string-append ;; "INFO"
+                                                          ;; "SHOW(\"SP\", SP);"
+                                                          (>cmp r0 sob-void)
+                                                          (>jeq skip-label)
+                                                          (>push r0)
+                                                          (>call "WRITE_SOB")
+                                                          (>drop "1")
+                                                          (>call "NEWLINE")
+                                                          (>make-label skip-label)
+                                                          ))))
     (lambda (code)
       (if (equal? code "") code (string-append prologue code (epilogue (^skip-label)))))))
 
