@@ -2082,13 +2082,16 @@
                                 (let ((index (get-const-offset indexed-consts const)))
                                   (string-append (>comment (format "const ~s" const))
                                                  nl
-                                                 (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index))))
-                                                 ))))
+                                                 (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index))))))))
 
-                                        ; TODO:
+                             ;; TODO: test
                              (pattern-rule
                               `(fvar ,(? 'v))
-                              (lambda (v) ""))
+                              (lambda (v)
+                                (let ((index (search-fvar-index-by-name fvars v)))
+                                  (string-append (>comment (format "fvar ~s" v))
+                                                 nl
+                                                 (>mov r0 (>imm (base+displ FVARS_TABLE_BASE_ADDR (number->string index))))))))
 
                              (pattern-rule
                               `(pvar ,(? 'v) ,(? 'minor))
@@ -2121,12 +2124,17 @@
                                                     (>make-label exit_label)
                                                     ))))
 
-                                        ; TODO:
+                             ;; TODO: test
                              (pattern-rule
                               `(def ,(? 'var-name) ,(? 'val))
-                              (lambda (var-name val) ""))
-
-                                        ; TODO: test
+                              (lambda (var-name val)
+                                (let ((index (search-fvar-index-by-name fvars var-name)))
+                                  (nl-string-append (code-gen major val)
+                                                    (>comment  (format "(def ~s ~s)" var-name val))
+                                                    (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string index)) R0)
+                                                    (>mov R0 sob-void)))))
+                             
+                             ;; TODO: test
                              (pattern-rule
                               `(lambda-simple ,(? 'args list?) ,(? 'body))
                               (lambda (args body)
@@ -2140,9 +2148,7 @@
                                                    body
                                                    major
                                                    code-gen))))
-
-
-                                        ; TODO:
+                             
                              (pattern-rule
                               `(lambda-opt ,(? 'args list?) ,(? 'opt-arg) ,(? 'body))
                               (lambda (args opt-arg body)
@@ -2156,9 +2162,7 @@
                                                    body
                                                    major
                                                    code-gen))))
-
-
-                                        ; TODO:
+                             
                              (pattern-rule
                               `(lambda-var ,(? 'arg) ,(? 'body))
                               (lambda (arg body)
@@ -2172,8 +2176,9 @@
                                                    body
                                                    major
                                                    code-gen))))
-
-                             (pattern-rule ;; TODO: test; error check?
+                             
+                             ;; TODO: test; error check?
+                             (pattern-rule
                               `(applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
@@ -2201,7 +2206,7 @@
                                                     ;(>drop "1") ;; for the (>push "0") earlier
                                                     ))))
 
-                                        ; TODO:
+                             ;; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs) ""))
@@ -2219,7 +2224,7 @@
                                                                                   args))
                                                  exit-label ":"))))
 
-                                        ; TODO: test
+                             ;; TODO: test
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
                               (lambda (var val)
@@ -2232,17 +2237,18 @@
                                                  (>mov r0 (>imm sob-void))
                                                  nl))))
 
+                             ;; TODO test
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
                               (lambda (exprs)
-                                (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs)))) ;; TODO test
+                                (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs))))
 
-; TODO:
+                             ;; TODO:
                              (pattern-rule
                               `(box ,(? 'var))
                               (lambda (var) ""))
 
-                                        ; TODO: test
+                             ;; TODO: test
                              (pattern-rule
                               `(box-get ,(? 'var))
                               (lambda (var)
@@ -2251,7 +2257,7 @@
                                                (code-gen major var)
                                                (>mov r0 (>ind r0)))))
 
-                                        ; TODO:
+                             ;; TODO:
                              (pattern-rule
                               `(box-set ,(? 'var) ,(? 'val))
                               (lambda (var val) ""))
@@ -2260,7 +2266,7 @@
                  code-gen)))))
 
       (lambda (e fvars indexed-consts)
-        (((^run fvars indexed-consts) (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))) 0 e)))))
+        (((^run (vector->list fvars) indexed-consts) (lambda () (error 'code-gen (format "I can't recognize this: ~s" e)))) 0 e)))))
 
 
 
@@ -2270,6 +2276,16 @@
 ;; ________________________________________________________________
 (load "tdd-tools.scm")
 
+(define collect-defined-fvars
+  (lambda (code)
+    (fold-left
+     (lambda (acc code-line)
+       (if (equal? (car code-line) 'def)
+           `(,@acc ,(cons (cadadr code-line) (caddr code-line)))
+           acc))
+     '()
+     code)))
+
 (define disassemble-const
   (lambda (c)
     (cond ((null? c) c)
@@ -2278,6 +2294,9 @@
                       (rest (cdr c)))
                   `(,@(disassemble-const rest) ,@(disassemble-const first) ,c))))))
 
+;; doesn't use the fvars table anymore!
+;; use 'collect-defined-fvars' instead
+;; 
 (define construct-tables
   (letrec ((^construct-sequence-tables
             (lambda (construct-tables-inner)
@@ -2303,9 +2322,6 @@
                       (if (not (list? e))
                           (error 'construct-tables-inner (format "e is not a list: ~s" e))
                           (let ((p-name (car e)))
-                            (display-normal consts)
-                            (display-colored-BIG e)
-                            (display-colored p-name)
                             (cond ((equal? 'const p-name)
                                    (cont fvars `(,@consts ,@(sort
                                                              (lambda (e1 e2) (cond ((and (list? e1)
@@ -2316,8 +2332,9 @@
                                                                                    (> e1 e2)))
                                                              (disassemble-const (cadr e))))))
 
-                                  ((equal? 'fvar p-name) (cont `(,@fvars ,(cadr e)) consts))
-                            
+                                  ;((equal? 'fvar p-name) (cont `(,@fvars ,(cadr e)) consts))
+                                  ((equal? 'fvar p-name) (cont fvars consts))
+                                  
                                   ((or (equal? 'pvar p-name)
                                        (equal? 'bvar p-name)
                                        (equal? 'box p-name)
@@ -2330,7 +2347,7 @@
                                          (<dif> (cadddr e)))
                                      (construct-sequence-tables `(,<test> ,<dit> ,<dif>) fvars consts cont)))
 
-                                  ((equal? 'def p-name) (construct-tables-inner (cadr e) fvars consts cont))
+                                  ((equal? 'def p-name) (display-colored-BIG (caddr e)) (construct-tables-inner (caddr e) fvars consts cont))
 
                                   ((equal? 'lambda-simple p-name) (construct-tables-inner (caddr e) fvars consts cont))
                                   ((equal? 'lambda-opt p-name) (construct-tables-inner (cadddr e) fvars consts cont))
@@ -2373,43 +2390,67 @@
   (lambda (string fail-cont)
     (list->sexpr (string->list string) fail-cont)))
 
+
+;;
+;; 
 (define get-tables
   (lambda (pes)
-    (let ((res (fold-left
-                (lambda (acc e)
-                  (let ((tables (construct-tables e)))
-                    `(,(list->set (append (car acc) (car tables)))
-                      ,(list->set (append (cadr acc) (cadr tables))))))
-                `(() ())
-                pes)))
-      (display-colored (cadr res))
-      res)))
+    (fold-left
+     (lambda (acc e)
+       (let ((tables (construct-tables e)))
+         `(,(list->set (append (car acc) (car tables)))
+           ,(list->set (append (cadr acc) (cadr tables))))))
+     `(() ())
+     pes)))
+
+
+(define search-f
+  (lambda (f lst el fail-cont)
+    (cond ((null? lst) (fail-cont))
+          ((equal? (f (car lst)) el) (car indexed-table))
+          (else (search-f f (cdr lst) const fail-cont)))))
+
+(define search-fvar-index-by-name
+  (lambda (fvars name)
+    (let ((counter (^counter)))
+      (search-f (lambda (x) (counter) (car x))
+                fvars
+                name
+                (lambda () (format "search-fvar-index-by-name: couldn't find element ~s in fvar-table ~s" name fvars)))
+      (- (counter) 1))))
+
+(define search-fvar-by-name
+  (lambda (fvars name)
+    (search-f car fvars name (lambda () (format "search-fvar-by-name: couldn't find element ~s in fvar-table ~s" name fvars)))))
 
 (define get-const-offset
               (let ((get-offset car) (get-const cdr))
                 (lambda (indexed-table const)
-                  (cond ((null? indexed-table) (format "ERROR_CONST_NOT_FOUND_IN_TABLE (encode-const-table): ~s" const))
+                  (display-colored (format "~s <-- ~s" const indexed-table))
+                  (cond ((null? indexed-table) (format "ERROR_CONST_NOT_FOUND_IN_TABLE (get-const-offset): ~s" const))
                         ((equal? (get-const (car indexed-table)) const) (get-offset (car indexed-table)))
                         (else (get-const-offset (cdr indexed-table) const))))))
 
 (define create-const-table-indexes
   (lambda(table)
     (let ((offset 0))
-      (vector-map (lambda (const)
-                    (let ((old-offset offset))
-                      (set! offset (+ offset (cond ((equal? const (void)) 1)
-                                                   ((null? const)         1)
-                                                   ((boolean? const)      2)
-                                                   ((char? const)         2)
-                                                   ((integer? const)      2)
-                                                   ((pair? const)         3)
-                                                   ((string? const) (+ 2 (string-length const)))
-                                                   ((symbol? const) '???)
-                                                   ((vector? const) (+ 2 (vector-length const)))
-                                                   ((procedure? const)    3)
-                                                   (else (error 'encode-const-table_offset: (format "cant decide type of argument: ~s" const))))))
-                      (cons old-offset const)))
-                  table))))
+      (cons
+       (vector-map (lambda (const)
+                     (let ((old-offset offset))
+                       (set! offset (+ offset (cond ((equal? const (void)) 1)
+                                                    ((null? const)         1)
+                                                    ((boolean? const)      2)
+                                                    ((char? const)         2)
+                                                    ((integer? const)      2)
+                                                    ((pair? const)         3)
+                                                    ((string? const) (+ 2 (string-length const)))
+                                                    ((symbol? const) '???)
+                                                    ((vector? const) (+ 2 (vector-length const)))
+                                                    ((procedure? const)    3)
+                                                    (else (error 'encode-const-table_offset: (format "cant decide type of argument: ~s" const))))))
+                       (cons old-offset const)))
+                   table)
+       offset))))
 
 (define encode-const-table
   (letrec ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x)))))))
@@ -2447,13 +2488,15 @@
                                                           (encode (>imm (number->string (string-length const))))
                                                           (encode t_string)))
 
-                                       ((symbol? const) "") ; TODO:
+                                       ;; TODO:
+                                       ((symbol? const) "")
                                        ((vector? const) (nl-string-append (map (lambda (el) 
                                                                                  (encode (>imm (number->string (get-const-offset indexed-table el)))))
                                                                                  (vector->list const))
                                                                           (encode (vector-length const))
                                                                           (encode t_vector)))
-                                       ((procedure? const) "") ; TODO:
+                                       ;; TODO:
+                                       ((procedure? const) "")
                                        (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const)))))
                                (vector->list table)))))))
 
@@ -2475,14 +2518,20 @@
 ;;;; generates print lines
 ;; 
 (define make-print
-  (let ((prologue "\n") (epilogue (nl-string-append ; "INFO"
+  (let* ((^skip-label (label-generator "skip_print_"))
+         (prologue "\n") 
+         (epilogue (lambda (skip-label) (nl-string-append ; "INFO"
                                                     ; "SHOW(\"SP\", SP);"
+                                                    (>cmp r0 sob-void)
+                                                    (>jeq skip-label)
                                                     (>push r0)
                                                     (>call "WRITE_SOB")
                                                     (>drop "1")
-                                                    (>call "NEWLINE"))))
+                                                    (>call "NEWLINE")
+                                                    (>make-label skip-label)
+                                                    ))))
     (lambda (code)
-      (if (equal? code "") code (string-append prologue code epilogue)))))
+      (if (equal? code "") code (string-append prologue code (epilogue (^skip-label)))))))
 
 
 
@@ -2532,9 +2581,12 @@ return 0;
                  sexprs))
 
            (tables (get-tables pes))
-           (fvars (list->vector (car tables)))
+           (fvars (list->vector (collect-defined-fvars pes)))
            (consts (list->vector (cadr tables)))
-           (inedxed-const-table (vector->list (create-const-table-indexes consts)))
+           
+           (consts-table-n-length (create-const-table-indexes consts))
+           (inedxed-const-table (vector->list (car consts-table-n-length)))
+           (const-table-length (number->string (cdr consts-table-n-length)))
            
            
            (generated-code (fold-left string-append "" (map (lambda (pes) (make-print (code-gen pes fvars inedxed-const-table))) pes)))
@@ -2544,21 +2596,27 @@ return 0;
                                           (encode-const-table CONST_TABLE_BASE_ADDR consts inedxed-const-table)
                                           generated-code))
            
-#|           (generated-code (string-append (generate-table-code consts
+           (generated-code (string-append (>nl (>define FVARS_TABLE_BASE_ADDR (base+displ CONST_TABLE_BASE_ADDR const-table-length)))
+                                          generated-code))
+           
+           #|
+           (generated-code (string-append (generate-table-code consts
                                                                "1000" ; actual const table address
                                                                CONST_TABLE_BASE_ADDR
                                                                (^make-sob consts))
                                           generated-code))
-|#
-           #|(generated-code (string-append (generate-table-code fvars 
+           
+           (generated-code (string-append (generate-table-code fvars 
                                                                (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-length consts))) 
                                                                FVARS_TABLE_BASE_ADDR
                                                                id) 
-                                          generated-code))|#
+                                          generated-code))
+           |#
 
            (generated-code (string-append prologue generated-code))
            (generated-code (string-append generated-code epilogue)))
-
+      ;(display-colored-BIG fvars)
+      
       (let ((output-port (open-output-file dest)))
         (display generated-code output-port)
         (close-output-port output-port)))))
