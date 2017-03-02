@@ -35,3 +35,6 @@ e
 
 `(looking (for (me ?)) ((here) ?))
 `(looking (for (me ?)) ((here) ? . ()))
+
+;(vector 1 2 3)
+;(vector 'black #\n 'yellow)

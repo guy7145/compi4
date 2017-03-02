@@ -6,7 +6,21 @@
         (filenames (list "numbers-and-booleans" "if-test" "or-tests" "simple-example" "lambda-simple-and-applic" "lambda-var" "lambda-opt" )) ; "cse-example" "vectors-and-lists"
         (prologue "
 (load \"tdd-tools.scm\")
+#|
+(define odisplay display)
+(define display	(lambda (x) 
+		(if 	(pair? x) 
+			(begin 	(display #\\( ) 
+				(display (car x)) 
+				(display #\\.) 
+				(display (cdr x)) 
+				(display #\\) )
+			)
+			(odisplay x)
+		)
 (display-colored-BIG 'Automated-compare-tests:)
+))
+|#
 ")
         (epilogue "
 (LightCyan)(display-normal 'done.)(NC)

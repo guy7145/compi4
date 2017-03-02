@@ -2487,7 +2487,10 @@
                   (>nl (>mov (>indd base-addr (number->string (counter))) val)))))
         (string-append (>nl (>comment "encode-const-table"))
                        (string-append-list (map (lambda (const)
-                                                  (display-colored const)
+                                                  (let ((sym-const-retrieve-actual-addr 
+                                                       (lambda (c) (if (symbol? c)
+                                                                       (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
+                                                                       (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
                                                   (cond ((equal? const (void)) (encode t_void))
                                                         
                                                         ((null? const) (encode t_nil))
@@ -2505,12 +2508,8 @@
                                                         ((pair? const) (let* ((a (car const))
                                                                               (b (cdr const))
                                                                               (n->s number->string)
-                                                                              (addr-a (if (symbol? a)
-                                                                                              (base+displ SYMBOL_TABLE_BASE_ADDR (n->s (get-symbol-offset-in-table sym-tbl a)))
-                                                                                              (base+displ CONST_TABLE_BASE_ADDR (n->s (get-const-offset indexed-table a)))))
-                                                                              (addr-b (if (symbol? b)
-                                                                                              (base+displ SYMBOL_TABLE_BASE_ADDR (n->s (get-symbol-offset-in-table sym-tbl b)))
-                                                                                              (base+displ CONST_TABLE_BASE_ADDR (n->s (get-const-offset indexed-table b))))))
+                                                                              (addr-a (sym-const-retrieve-actual-addr a))
+                                                                              (addr-b (sym-const-retrieve-actual-addr b)))
                                                                          
                                                                          (nl-string-append (encode (>imm addr-b))
                                                                                            (encode (>imm addr-a))
@@ -2525,16 +2524,15 @@
                                                                            (encode t_string)))
 
                                                         ;; TODO:
-                                                        ((symbol? const) "")
+                                                        ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
                                                         ;; TODO: Fix, add support to symbols
-                                                        ((vector? const) (nl-string-append (map (lambda (el)
-                                                                                                  (encode (>imm (number->string (get-const-offset indexed-table el)))))
+                                                        ((vector? const) (nl-string-append (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
                                                                                                 (vector->list const))
                                                                                            (encode (vector-length const))
                                                                                            (encode t_vector)))
                                                         ;; TODO:
                                                         ((procedure? const) "")
-                                                        (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const)))))
+                                                        (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const))))))
                                                 (vector->list table))))))))
 
 (define encode-symbol-table
