@@ -30,5 +30,8 @@ e
 'is-it
 `me
 '(youre)
-;`(looking for)
+`(looking for)
 #\?
+
+`(looking (for (me ?)) ((here) ?))
+`(looking (for (me ?)) ((here) ? . ()))
