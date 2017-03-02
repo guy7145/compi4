@@ -9,24 +9,26 @@
 1
 ;(void)
 ;(list 1 2 3 4)
-;'(1 2 3 4 5)
-;'(1 2 3)
+'(1 2 3 4 5)
+'(1 2 3)
 #f
-;'(#t #f #t #f)
+;(void)
+'symbol
+'(#t #f #t #f)
 (define e 5)
 e
 ;(set! e 6)
 e
 1
 2
-;'(4 5)
+'(4 5)
 #t
 #f
 4
 
 "hello"
-;'is-it
-;`me
-;'(youre)
+'is-it
+`me
+'(youre)
 ;`(looking for)
 #\?
