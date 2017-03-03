@@ -43,8 +43,11 @@
 (define sp "SP")
 
 ;; constants
+;; 
+(define CONST_TABLE_ACTUAL_ADDRESS "1000")
 (define CONST_TABLE_BASE_ADDR "consts_addr")
 (define FVARS_TABLE_BASE_ADDR "fvars_addr")
+(define SYMBOL_TABLE_BASE_ADDR "sym_tbl_addr")
 
 (define sob-false "SOB_FALSE")
 (define sob-true "SOB_TRUE")
