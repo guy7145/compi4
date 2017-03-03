@@ -94,6 +94,12 @@
         (begin (display-colored input) (display-colored-2 (parse input)) #f)
         #t)))
 
+(define ASSERT-EQUAL-ex-apply
+  (lambda (input parse f1 f2)
+    (if (not (ASSERT-EQUAL (apply f1 input) (apply f2 input)))
+        (begin (display-colored input) #f)
+        #t)))
+
 (define get-first-line
   (lambda (lst)
     (if (null? lst)

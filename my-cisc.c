@@ -20,6 +20,7 @@ int main()
 #include "compi4/arch/string.lib"
 #include "compi4/arch/system.lib"
 #include "compi4/arch/scheme.lib"
+#include "compi4/arch/lib/library-funcs.asm"
 
 	CONTINUE:
 	PUSH(IMM(15663));
