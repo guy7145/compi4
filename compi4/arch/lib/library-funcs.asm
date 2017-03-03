@@ -93,8 +93,11 @@ CONS:
 	CALL(MAKE_SOB_PAIR);
 	RETURN;
 
-DENOMINATOR: ///////////////////////////////////////////////////////////////////////
-
+DENOMINATOR:
+	MOV(R0, INDD(STARG(0), 2));
+	PUSH(R0);
+	CALL(SOB_MAKE_INTEGER);
+	RETURN;
 
 PRED_EQ:
 	MOV(R0, SOB_TRUE);
@@ -155,8 +158,11 @@ PRED_NULL:
 	CALL(IS_SOB_NIL);
 	RETURN;
 
-NUMERATOR: //////////////////////////////////////////////////////////////////////////
-
+NUMERATOR:
+	MOV(R0, INDD(STARG(0), 1));
+	PUSH(R0);
+	CALL(SOB_MAKE_INTEGER);
+	RETURN;
 
 PRED_PAIR:
 	PUSH(STARG(0));
