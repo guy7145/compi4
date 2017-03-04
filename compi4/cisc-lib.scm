@@ -71,7 +71,7 @@
 (define t_pair "T_PAIR")
 (define t_vector "T_VECTOR")
 (define t_closure "T_CLOSURE")
-
+(define t_rational "T_RATIONAL")
 
 ;; backend stuff
 (define nl "\n")
@@ -220,7 +220,21 @@
 
 
 
+;; CISC FORMS
+;; 
+(define >>scheme-function
+  (lambda body (nl-string-append (>push fp)
+                                   (>mov fp sp)
+                                   
+                                   (string-append-list body)
+                                   
+                                   (>mov sp fp)
+                                   (>pop fp)
+                                   (>ret))))
 
+(define >>arg 
+  (lambda (i) 
+    (>fparg-nan (base+displ "2" i))))  
 
 
 

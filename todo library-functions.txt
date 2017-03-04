@@ -8,13 +8,15 @@ DONE: 	(still needs to be tested)
 	procedure?
 	string?
 	symbol?
+	rational?
+	
+	cons
+	car
+	cdr
 
 TODO:	scheme-
 		
 	cisc-
-		cons
-		car
-		cdr
 		set-car!
 		set-cdr!
 		char->integer
@@ -42,7 +44,6 @@ make-vector
 map
 not
 numerator
-rational?
 remainder
 string-ref
 string-set!
