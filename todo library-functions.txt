@@ -16,17 +16,18 @@ DONE: 	(still needs to be tested)
 	set-car!
 	set-cdr!
 
+	string-length
+	vector-length
+
 TODO:	scheme-
 		
 	cisc-
 		char->integer
 		integer->char
-
-		string-length, vector-length (same-same, new name)
+		vector-ref
+		vector-set!
 		string-ref
-	string-set!
-	vector-ref
-vector-set!
+		string-set!
 
 
 

@@ -2570,6 +2570,7 @@
               (>call "MAKE_SOB_INTEGER")
               (>drop "1")
               )))
+
 (define vector-length-encoder string-length-encoder)
 
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
