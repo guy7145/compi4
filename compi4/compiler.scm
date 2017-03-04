@@ -2468,27 +2468,7 @@
         `(vector? ,t_vector)
         `(rational? ,t_rational)))
 
-(define dummy-value "some_dummy_value")
-(define retrieve-lib-predicate-functions
-  (lambda () (fold-left
-              (lambda (acc x) `(,@acc ,(cons (car x) dummy-value)))
-              '()
-              pred-names-types-and-labels)))
 
-(define <initial-fvar-tbl>
-  `((car ,dummy-value)
-    (cdr ,dummy-value)
-    (cons ,dummy-value)
-    (set-car! ,dummy-value)
-    (set-cdr! ,dummy-value)
-    ,@(retrieve-lib-predicate-functions)))
-
-(define lib-func?
-  (lambda (x)
-    (search-f car
-              <initial-fvar-tbl>
-              x
-              (lambda () #f))))
 
 (define ^predicate-encoder
   (let* ((^label-exit (label-generator "L_LIBARY_PREDICATE_EXIT_"))
@@ -2582,13 +2562,43 @@
               (>mov (>indd R0 "2") (>>arg "1"))
               )))
 
+(define string-length-encoder
+  (lambda () (>>scheme-function
+              (>mov R0 (>>arg "0"))
+              (>mov R0 (>indd R0 "1"))
+              (>push R0)
+              (>call "MAKE_SOB_INTEGER")
+              (>drop "1")
+              )))
+(define vector-length-encoder string-length-encoder)
+
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
                             (cdr  . ,cdr-encoder)
                             (cons . ,cons-encoder)
                             (set-car! . ,set-car!-encoder)
                             (set-cdr! . ,set-cdr!-encoder)
+                            (string-length . ,string-length-encoder)
+                            (vector-length . ,vector-length-encoder)
                             ))
+
+(define dummy-value "some_dummy_value")
+(define retrieve-lib-function-names
+  (lambda () (fold-left
+              (lambda (acc x) `(,@acc ,(cons (car x) dummy-value)))
+              '()
+              cisc-lib-encoders)))
+
+(define <initial-fvar-tbl>
+  (retrieve-lib-function-names))
+
+(define lib-func?
+  (lambda (x)
+    (search-f car
+              <initial-fvar-tbl>
+              x
+              (lambda () #f))))
+
 (define cisc-lib-encoding
   (let* ((fvar-tbl <initial-fvar-tbl>)
          (^func-label (label-generator "LIB_FUNC_"))

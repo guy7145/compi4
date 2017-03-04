@@ -14,4 +14,7 @@
 (car (cons 1 2))
 (cdr (cons 1 2))
 (let ((x (cons 1 2))) (set-cdr! x 3) x)
+(string-length "asdnlsdkfj")
+(string-length "124d")
+(string-length "")
 

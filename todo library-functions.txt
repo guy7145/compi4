@@ -13,22 +13,30 @@ DONE: 	(still needs to be tested)
 	cons
 	car
 	cdr
+	set-car!
+	set-cdr!
 
 TODO:	scheme-
 		
 	cisc-
-		set-car!
-		set-cdr!
 		char->integer
 		integer->char
+
 		string-length, vector-length (same-same, new name)
+		string-ref
+	string-set!
+	vector-ref
+vector-set!
 
 
 
 zero?
 number?
+
 append (variadic)
+
 apply
+
 < (variadic) 
 = (variadic)
 > (variadic)
@@ -36,19 +44,23 @@ apply
 / (variadic)
 * (variadic)
 - (variadic)
+
 denominator
-eq?
-list (variadic)
-make-string
-make-vector
-map
-not
 numerator
 remainder
-string-ref
-string-set!
+
+eq?
+
+list (variadic)
+
+make-string
+make-vector
+vector
+
+map
+
+not
+
 string->symbol
 symbol->string
-vector
-vector-ref
-vector-set!
+
