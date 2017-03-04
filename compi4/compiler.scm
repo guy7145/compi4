@@ -2457,16 +2457,15 @@
 (define DUMMY_ENV_ACTUAL_ADDRESS "0")
 
 (define pred-names-types-and-labels
-  (let ((^label-lib-func (label-generator "LIB_FUNC_")))
-    (list `(boolean? ,t_bool ,(^label-lib-func)) ; 'zero? 'rational? 'number?
-          `(char? ,t_char ,(^label-lib-func))
-          `(integer? ,t_integer ,(^label-lib-func))
-          `(null? ,t_nil ,(^label-lib-func))
-          `(pair? ,t_pair ,(^label-lib-func))
-          `(procedure? ,t_closure ,(^label-lib-func))
-          `(string? ,t_string ,(^label-lib-func))
-          `(symbol? ,t_symbol ,(^label-lib-func))
-          `(vector? ,t_vector ,(^label-lib-func)))))
+    (list `(boolean? ,t_bool) ; 'zero? 'rational? 'number?
+          `(char? ,t_char)
+          `(integer? ,t_integer)
+          `(null? ,t_nil)
+          `(pair? ,t_pair)
+          `(procedure? ,t_closure)
+          `(string? ,t_string)
+          `(symbol? ,t_symbol)
+          `(vector? ,t_vector)))
 
 (define dummy-value "some_dummy_value")
 (define retrieve-lib-predicate-functions
@@ -2475,7 +2474,7 @@
               '()
               pred-names-types-and-labels)))
 
-(define <initial-fvar-tbl> 
+(define <initial-fvar-tbl>
   (retrieve-lib-predicate-functions))
 
 (define lib-func?
@@ -2485,66 +2484,79 @@
               x
               (lambda () #f))))
 
-(define generate-predicates
+(define ^predicate-code-gen
+  (let* ((^label-exit (label-generator "L_LIBARY_PREDICATE_EXIT_"))
+         (^label-eq (label-generator "L_LIBARY_PREDICATE_TRUE_")))
+    (lambda (name type)
+      (let ((label-exit (^label-exit))
+            (label-eq (^label-eq)))
+        (cons name
+              (lambda ()
+                (nl-string-append (>push fp)
+                                  (>mov fp sp)
+
+                                  (>mov R0 (>fparg 2))     ; mov r0, argument
+                                  (>cmp (>ind R0) type)    ; cmp r0, t_?
+                                  (>jeq label-eq)          ; jump_eq equal
+                                  (>mov R0 sob-false)      ; mov r0, #f
+                                  (>jmp label-exit)        ; jmp exit
+                                  (>make-label label-eq)   ; equal:
+                                  (>mov R0 sob-true)       ; mov r0, #t
+
+                                  (>make-label label-exit) ; exit:
+                                  (>mov sp fp)
+                                  (>pop fp)
+                                  (>ret)
+                                  )))))))
+
+
+
+
+(define generate-predicate-encoders
   (let* ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
          (get-name car)
-         (get-type cadr)
-         (get-label caddr)
-         (^label-exit (label-generator "L_LIBARY_PREDICATE_EXIT_"))
-         (^label-eq (label-generator "L_LIBARY_PREDICATE_TRUE_"))
-         (^skip-label (label-generator "L_GENERATE_PREDICATES_SKIP_LABEL_"))
-         (predicate-code-gen
-          (lambda (name type func-label)
-            (let ((label-exit (^label-exit))
-                  (label-eq (^label-eq)))
-
-              (nl-string-append (>make-label func-label)
-                                (>push fp)
-                                (>mov fp sp)
-
-                                (>mov R0 (>fparg 2))     ; mov r0, argument
-                                (>cmp (>ind R0) type)    ; cmp r0, t_?
-                                (>jeq label-eq)          ; jump_eq equal
-                                (>mov R0 sob-false)      ; mov r0, #f
-                                (>jmp label-exit)        ; jmp exit
-                                (>make-label label-eq)   ; equal:
-                                (>mov R0 sob-true)       ; mov r0, #t
-
-                                (>make-label label-exit) ; exit:
-                                (>mov sp fp)
-                                (>pop fp)
-                                (>ret)
-                                )))))
-
+         (get-type cadr))
     (lambda (fvar-tbl)
-      (map (lambda (name-type-label)
-             (let* ((name (get-name name-type-label))
-                    (type (get-type name-type-label))
-                    (func-label (get-label name-type-label))
-                    (offset-in-tbl (search-fvar-index-by-name fvar-tbl name))
-                    (skip-label (^skip-label)))
-
-               (nl-string-append (>comment  (format "library-function: ~s" name))
-
-                                 ;; create the closure object
-                                 (>mov-res R0 (>malloc "3"))
-                                 (>mov (>indd R0 "0") t_closure)               ; t_closure
-                                 (>mov (>indd R0 "1") DUMMY_ENV)               ; env
-                                 (>mov (>indd R0 "2") (>get-label func-label)) ; code-pointer
-                                 ;; mov address of the sob to the table
-                                 (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string offset-in-tbl)) R0)
-
-                                 ;; create lambda body
-                                 (>jmp skip-label)
-                                 (predicate-code-gen name type func-label)
-                                 (>make-label skip-label)
-
-                                 ;; return void?
-                                 (>mov R0 sob-void))))
+      (map (lambda (name-type)
+             (let* ((name (get-name name-type))
+                    (type (get-type name-type)))
+               (^predicate-code-gen name type)))
            pred-names-types-and-labels))))
 
 
 
+
+(define cisc-lib-encoders (generate-predicate-encoders <initial-fvar-tbl>))
+(define cisc-lib-encoding
+  (let ((fvar-tbl <initial-fvar-tbl>)
+        (^func-label (label-generator "LIB_FUNC_")) 
+        (^skip-label (label-generator "L_GENERATE_PREDICATES_SKIP_LABEL_")))
+    (string-append-list
+     (map (lambda (name-encoder)
+            (let* ((name (car name-encoder))
+                   (ENCODER (cdr name-encoder))
+                   (offset-in-tbl (search-fvar-index-by-name fvar-tbl name))
+                   (func-label (^func-label))
+                   (skip-label (^skip-label)))
+              (nl-string-append (>comment  (format "library-function: ~s" name))
+
+                                ;; create the closure object
+                                (>mov-res R0 (>malloc "3"))
+                                (>mov (>indd R0 "0") t_closure)               ; t_closure
+                                (>mov (>indd R0 "1") DUMMY_ENV)               ; env
+                                (>mov (>indd R0 "2") (>get-label func-label)) ; code-pointer
+                                ;; mov address of the sob to the table
+                                (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string offset-in-tbl)) R0)
+
+                                ;; create lambda body
+                                (>jmp skip-label)
+                                (>make-label func-label)
+                                (ENCODER)
+                                (>make-label skip-label)
+
+                                ;; return void?
+                                (>mov R0 sob-void))))
+          cisc-lib-encoders))))
 
 
 ;; _________compile-scheme-file____________________________________
@@ -2736,28 +2748,11 @@ return 0;
 
                                           (generate-constants-macro indexed-const-table)
                                           (>nl (>define DUMMY_ENV DUMMY_ENV_ACTUAL_ADDRESS))
-                                          (>nl (string-append-list (generate-predicates (vector->list fvars))))
+                                          
+                                          cisc-lib-encoding 
+                                          nl
 
                                           generated-code))
-#|
-           
-           (generated-code (string-append (>nl (>define DUMMY_ENV DUMMY_ENV_ACTUAL_ADDRESS))
-                                          (>nl (string-append-list (generate-predicates (vector->list fvars))))
-                                          generated-code))
-|#           
-           #|
-           (generated-code (string-append (generate-table-code consts
-                                                               "1000" ; actual const table address
-                                                               CONST_TABLE_BASE_ADDR
-                                                               (^make-sob consts))
-                                          generated-code))
-           
-           (generated-code (string-append (generate-table-code fvars 
-                                                               (base+displ CONST_TABLE_BASE_ADDR (number->string (vector-length consts))) 
-                                                               FVARS_TABLE_BASE_ADDR
-                                                               id) 
-                                          generated-code))
-           |#
 
            (generated-code (string-append prologue generated-code))
            (generated-code (string-append generated-code epilogue)))
