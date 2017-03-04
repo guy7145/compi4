@@ -12,6 +12,10 @@
     (display-green x)
     (string-append-list x)))
 |#
+#|
+(define ocar car)
+(define car (lambda (x) (display-colored-BIG x) (ocar x)))
+|#
 
 (define DEBUG-PRINT
   (lambda (obj)

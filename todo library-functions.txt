@@ -1,0 +1,53 @@
+DONE: 	(still needs to be tested)
+	boolean?
+	integer?
+	char?
+	null?
+	vector?
+	pair?
+	procedure?
+	string?
+	symbol?
+
+TODO:	scheme-
+		
+	cisc-
+		cons
+		car
+		cdr
+		set-car!
+		set-cdr!
+		char->integer
+		integer->char
+		string-length, vector-length (same-same, new name)
+
+
+
+zero?
+number?
+append (variadic)
+apply
+< (variadic) 
+= (variadic)
+> (variadic)
++ (variadic)
+/ (variadic)
+* (variadic)
+- (variadic)
+denominator
+eq?
+list (variadic)
+make-string
+make-vector
+map
+not
+numerator
+rational?
+remainder
+string-ref
+string-set!
+string->symbol
+symbol->string
+vector
+vector-ref
+vector-set!

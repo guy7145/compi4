@@ -1968,10 +1968,21 @@
       (let ((length (vector-length vector)))
         (iterator vector f 0 length (make-vector length))))))
 
-#|(define string-append-list
-  (lambda (list)
-    (fold-left string-append "" list)))|#
+(define index-of
+  (letrec ((inner-index-of
+            (lambda (lst el i cont)
+              (cond ((null? lst) (cont))
+                    ((equal? (car lst) el) i)
+                    (else (inner-index-of (cdr lst) el (+ 1 i) cont))))))
+    (lambda (lst el)
+      (inner-index-of lst el 0 (lambda () (error 'index-of (format "index-of: couldn't find element ~s in list ~s" el lst)))))))
 
+
+(define search-f
+  (lambda (f lst el fail-cont)
+    (cond ((null? lst) (fail-cont))
+          ((equal? (f (car lst)) el) (car lst))
+          (else (search-f f (cdr lst) el fail-cont)))))
 
 (load "cisc-lib.scm")
 
@@ -2000,26 +2011,26 @@
     (nl-string-append
      (>comment (format "lambda code-gen, body: ~s" body))
 
+     ;; allocate space for new enviroment
      (>mov-res R2
                (>malloc (number->string (+ 1 major)))) ; R2 <- new env (empty)
      (>mov R1 (>fparg 0))                              ; R1 <- old env
 
-; copy old enviroment to new enviroment
+     ;; copy old enviroment to new enviroment
      (>comment (format "copy old enviroment to new enviroment:"))
-     ;; for ( i = 0; i < major; i++) { body... }
-     (>for-loop "0"
+     (>for-loop "0"                    ; for ( i = 0; i < major; i++) { body... }
                 (number->string major)
                 >inc
                 >jge
-                (>mov (>indd R2 (string-append loop-counter " + 1"))
-                      (>indd R1 loop-counter)))
+                (>mov (>indd R2 (string-append loop-counter " + 1")) ; <-
+                      (>indd R1 loop-counter)))                      ; <- body
 
-                                        ; allocate space for args in the enviroment
+     ;; allocate space for args in the enviroment
      (>comment (format "allocate space for args in the enviroment:"))
      (>mov R3 (>fparg 1))
      (>mov-res (>indd R2 "0") (>malloc R3))
 
-                                        ; copy arguments to new enviroment
+     ;; copy arguments to new enviroment
      (>comment (format "copy arguments to new enviroment:"))
      (>mov R0 (>indd R2 "0"))
      (>for-loop "0"
@@ -2029,7 +2040,7 @@
                 (>mov (>indd R0 loop-counter)
                       (>fparg-nan (string-append loop-counter " + 1"))))
 
-                                        ; create lambda_sob object
+     ;; create lambda_sob object
      (>comment (format "create lambda_sob object:"))
      (>mov-res R0 (>malloc "3"))
      (>mov (>indd R0 "0") t_closure)               ; t_closure
@@ -2046,11 +2057,6 @@
      (>comment (format "stack-fix:"))
      stack-fix ;; <------- stack fix for lambda-opt and lambda-var
      (>comment (format "end of stack-fix"))
-
-                                        ; argument number check
-                                        ;(>cmp (>fparg 1) (>imm num-of-params))
-                                        ;(>jne "L_error_lambda_args_count")
-
 
 
      (code-gen (+ 1 major) body)
@@ -2200,12 +2206,8 @@
                                                                                         (>push R0)))
                                                           exprs))
                                                     (>push num-of-args)
-                                                    (code-gen major func)
 
-                                                    #| TYPE CHECK:
-                                                    (>cmp (>indd R0 0) (>imm t_closure))
-                                                    (>jne "L_error_cannot_apply_non_clos")
-                                                    |#
+                                                    (code-gen major func)
 
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
@@ -2294,7 +2296,7 @@
        (if (equal? (car code-line) 'def)
            `(,@acc ,(cons (cadadr code-line) (caddr code-line)))
            acc))
-     '()
+     <initial-fvar-tbl>
      code)))
 
 (define disassemble-const
@@ -2348,7 +2350,7 @@
                                          (let* ((ds (disassemble-const c))
                                                 (constants (map (lambda (d) (if (symbol? d) (symbol->string d) d)) ds))
                                                 (symbols (fold-left (lambda (acc d) (if (symbol? d) (cons d acc) acc)) '() ds)))
-                                         (cont `(,@sym-tbl ,@symbols) `(,@consts ,@(sort SORT-COMPARATOR constants)))))))
+                                           (cont `(,@sym-tbl ,@symbols) `(,@consts ,@(sort SORT-COMPARATOR constants)))))))
 
                                   ((equal? 'fvar p-name) (cont sym-tbl consts))
 
@@ -2392,64 +2394,6 @@
 
         (lambda (e) (construct-tables-inner e <initial-symbol-table> <initial-const-table> (lambda (sym-tbl consts) `(,sym-tbl ,consts))))))))
 
-
-;; _________compile-scheme-file____________________________________
-;; ________________________________________________________________ 
-
-(define list->sexpr
-  (lambda (list fail-cont)
-    (<sexpr> list
-             (lambda (e s)
-               (if (null? s) `(,e) `(,e ,@(list->sexpr s fail-cont))))
-             fail-cont)))
-
-(define string->sexpr
-  (lambda (string fail-cont)
-    (list->sexpr (string->list string) fail-cont)))
-
-
-;; calls 'construct-tables' and removes doubles
-;; pes = parsed expressions
-(define get-tables
-  (let ((get-sym-tbl car) (get-const-tbl cadr))
-    (lambda (pes)
-      (fold-left
-       (lambda (acc e)
-         (let ((tables (construct-tables e)))
-           `(,(list->set (append (get-sym-tbl acc) (get-sym-tbl tables)))
-             ,(list->set (append (get-const-tbl acc) (get-const-tbl tables))))))
-       `(() ())
-       pes))))
-
-(define index-of
-  (letrec ((inner-index-of
-            (lambda (lst el i cont)
-              (cond ((null? lst) (cont))
-                    ((equal? (car lst) el) i)
-                    (else (inner-index-of (cdr lst) el (+ 1 i) cont))))))
-    (lambda (lst el)
-      (inner-index-of lst el 0 (lambda () (error 'index-of (format "index-of: couldn't find element ~s in list ~s" el lst)))))))
-
-
-(define search-f
-  (lambda (f lst el fail-cont)
-    (cond ((null? lst) (fail-cont))
-          ((equal? (f (car lst)) el) (car indexed-table))
-          (else (search-f f (cdr lst) const fail-cont)))))
-
-(define search-fvar-index-by-name
-  (lambda (fvars name)
-    (let ((counter (^counter)))
-      (search-f (lambda (x) (counter) (car x))
-                fvars
-                name
-                (lambda () (format "search-fvar-index-by-name: couldn't find element ~s in fvar-table ~s" name fvars)))
-      (- (counter) 1))))
-
-(define search-fvar-by-name
-  (lambda (fvars name)
-    (search-f car fvars name (lambda () (format "search-fvar-by-name: couldn't find element ~s in fvar-table ~s" name fvars)))))
-
 (define get-const-offset
   (let ((get-offset car) (get-const cdr))
     (lambda (indexed-table const)
@@ -2478,6 +2422,145 @@
                    table)
        offset))))
 
+(define search-fvar-index-by-name
+  (lambda (fvars name)
+    (let ((counter (^counter)))
+      (search-f (lambda (x) (counter) (car x))
+                fvars
+                name
+                (lambda () (format "search-fvar-index-by-name: couldn't find element ~s in fvar-table ~s" name fvars)))
+      (- (counter) 1))))
+
+(define search-fvar-by-name
+  (lambda (fvars name)
+    (search-f car fvars name (lambda () (format "search-fvar-by-name: couldn't find element ~s in fvar-table ~s" name fvars)))))
+
+;; calls 'construct-tables' and removes doubles
+;; pes = parsed expressions
+(define get-tables
+  (let ((get-sym-tbl car) (get-const-tbl cadr))
+    (lambda (pes)
+      (fold-left
+       (lambda (acc e)
+         (let ((tables (construct-tables e)))
+           `(,(list->set (append (get-sym-tbl acc) (get-sym-tbl tables)))
+             ,(list->set (append (get-const-tbl acc) (get-const-tbl tables))))))
+       `(() ())
+       pes))))
+
+;; _________library_functions______________________________________
+;; ________________________________________________________________ 
+
+;; dummy enviroment
+;; (for the closure objects)
+(define DUMMY_ENV "DUMMY_ENVIROMENT")
+(define DUMMY_ENV_ACTUAL_ADDRESS "0")
+
+(define pred-names-types-and-labels
+  (let ((^label-lib-func (label-generator "LIB_FUNC_")))
+    (list `(boolean? ,t_bool ,(^label-lib-func)) ; 'zero? 'rational? 'number?
+          `(char? ,t_char ,(^label-lib-func))
+          `(integer? ,t_integer ,(^label-lib-func))
+          `(null? ,t_nil ,(^label-lib-func))
+          `(pair? ,t_pair ,(^label-lib-func))
+          `(procedure? ,t_closure ,(^label-lib-func))
+          `(string? ,t_string ,(^label-lib-func))
+          `(symbol? ,t_symbol ,(^label-lib-func))
+          `(vector? ,t_vector ,(^label-lib-func)))))
+
+(define dummy-value "some_dummy_value")
+(define retrieve-lib-predicate-functions
+  (lambda () (fold-left
+              (lambda (acc x) `(,@acc ,(cons (car x) dummy-value)))
+              '()
+              pred-names-types-and-labels)))
+
+(define <initial-fvar-tbl> 
+  (retrieve-lib-predicate-functions))
+
+(define lib-func?
+  (lambda (x)
+    (search-f car
+              <initial-fvar-tbl>
+              x
+              (lambda () #f))))
+
+(define generate-predicates
+  (let* ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+         (get-name car)
+         (get-type cadr)
+         (get-label caddr)
+         (^label-exit (label-generator "L_LIBARY_PREDICATE_EXIT_"))
+         (^label-eq (label-generator "L_LIBARY_PREDICATE_TRUE_"))
+         (^skip-label (label-generator "L_GENERATE_PREDICATES_SKIP_LABEL_"))
+         (predicate-code-gen
+          (lambda (name type func-label)
+            (let ((label-exit (^label-exit))
+                  (label-eq (^label-eq)))
+
+              (nl-string-append (>make-label func-label)
+                                (>push fp)
+                                (>mov fp sp)
+
+                                (>mov R0 (>fparg 2))     ; mov r0, argument
+                                (>cmp (>ind R0) type)    ; cmp r0, t_?
+                                (>jeq label-eq)          ; jump_eq equal
+                                (>mov R0 sob-false)      ; mov r0, #f
+                                (>jmp label-exit)        ; jmp exit
+                                (>make-label label-eq)   ; equal:
+                                (>mov R0 sob-true)       ; mov r0, #t
+
+                                (>make-label label-exit) ; exit:
+                                (>mov sp fp)
+                                (>pop fp)
+                                (>ret)
+                                )))))
+
+    (lambda (fvar-tbl)
+      (map (lambda (name-type-label)
+             (let* ((name (get-name name-type-label))
+                    (type (get-type name-type-label))
+                    (func-label (get-label name-type-label))
+                    (offset-in-tbl (search-fvar-index-by-name fvar-tbl name))
+                    (skip-label (^skip-label)))
+
+               (nl-string-append (>comment  (format "library-function: ~s" name))
+
+                                 ;; create the closure object
+                                 (>mov-res R0 (>malloc "3"))
+                                 (>mov (>indd R0 "0") t_closure)               ; t_closure
+                                 (>mov (>indd R0 "1") DUMMY_ENV)               ; env
+                                 (>mov (>indd R0 "2") (>get-label func-label)) ; code-pointer
+                                 ;; mov address of the sob to the table
+                                 (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string offset-in-tbl)) R0)
+
+                                 ;; create lambda body
+                                 (>jmp skip-label)
+                                 (predicate-code-gen name type func-label)
+                                 (>make-label skip-label)
+
+                                 ;; return void?
+                                 (>mov R0 sob-void))))
+           pred-names-types-and-labels))))
+
+
+
+
+
+;; _________compile-scheme-file____________________________________
+;; ________________________________________________________________ 
+
+(define list->sexpr
+  (lambda (list fail-cont)
+    (<sexpr> list
+             (lambda (e s)
+               (if (null? s) `(,e) `(,e ,@(list->sexpr s fail-cont))))
+             fail-cont)))
+
+(define string->sexpr
+  (lambda (string fail-cont)
+    (list->sexpr (string->list string) fail-cont)))
+
 (define encode-const-table
   (letrec ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x)))))))
     (lambda (base-addr table indexed-table sym-tbl)
@@ -2487,52 +2570,52 @@
                   (>nl (>mov (>indd base-addr (number->string (counter))) val)))))
         (string-append (>nl (>comment "encode-const-table"))
                        (string-append-list (map (lambda (const)
-                                                  (let ((sym-const-retrieve-actual-addr 
-                                                       (lambda (c) (if (symbol? c)
-                                                                       (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
-                                                                       (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
-                                                  (cond ((equal? const (void)) (encode t_void))
-                                                        
-                                                        ((null? const) (encode t_nil))
-                                                        
-                                                        ((boolean? const) (nl-string-append (encode (>imm (number->string (if const 1 0))))
-                                                                                            (encode t_bool)))
+                                                  (let ((sym-const-retrieve-actual-addr
+                                                         (lambda (c) (if (symbol? c)
+                                                                         (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
+                                                                         (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
+                                                    (cond ((equal? const (void)) (encode t_void))
 
-                                                        ((char? const) (nl-string-append (encode (string-append "'" (list->string `(,const)) "'"))
-                                                                                         (encode t_char)))
+                                                          ((null? const) (encode t_nil))
 
-                                                        ((integer? const)
-                                                         (nl-string-append (encode (>imm (number->string const)))
-                                                                           (encode t_integer)))
+                                                          ((boolean? const) (nl-string-append (encode (>imm (number->string (if const 1 0))))
+                                                                                              (encode t_bool)))
 
-                                                        ((pair? const) (let* ((a (car const))
-                                                                              (b (cdr const))
-                                                                              (n->s number->string)
-                                                                              (addr-a (sym-const-retrieve-actual-addr a))
-                                                                              (addr-b (sym-const-retrieve-actual-addr b)))
-                                                                         
-                                                                         (nl-string-append (encode (>imm addr-b))
-                                                                                           (encode (>imm addr-a))
-                                                                                           (encode t_pair))))
+                                                          ((char? const) (nl-string-append (encode (string-append "'" (list->string `(,const)) "'"))
+                                                                                           (encode t_char)))
 
-                                                        ((string? const)
-                                                         (nl-string-append (string-append-list
-                                                                            (map (lambda (char)
-                                                                                   (>nl (encode (list->string (list #\' char #\')))))
-                                                                                 (string->list const)))
-                                                                           (encode (>imm (number->string (string-length const))))
-                                                                           (encode t_string)))
+                                                          ((integer? const)
+                                                           (nl-string-append (encode (>imm (number->string const)))
+                                                                             (encode t_integer)))
 
-                                                        ;; TODO:
-                                                        ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
-                                                        ;; TODO: Fix, add support to symbols
-                                                        ((vector? const) (nl-string-append (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
-                                                                                                (vector->list const))
-                                                                                           (encode (vector-length const))
-                                                                                           (encode t_vector)))
-                                                        ;; TODO:
-                                                        ((procedure? const) "")
-                                                        (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const))))))
+                                                          ((pair? const) (let* ((a (car const))
+                                                                                (b (cdr const))
+                                                                                (n->s number->string)
+                                                                                (addr-a (sym-const-retrieve-actual-addr a))
+                                                                                (addr-b (sym-const-retrieve-actual-addr b)))
+
+                                                                           (nl-string-append (encode (>imm addr-b))
+                                                                                             (encode (>imm addr-a))
+                                                                                             (encode t_pair))))
+
+                                                          ((string? const)
+                                                           (nl-string-append (string-append-list
+                                                                              (map (lambda (char)
+                                                                                     (>nl (encode (list->string (list #\' char #\')))))
+                                                                                   (string->list const)))
+                                                                             (encode (>imm (number->string (string-length const))))
+                                                                             (encode t_string)))
+
+                                                          ;; TODO:
+                                                          ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
+                                                          ;; TODO: fix
+                                                          ((vector? const) (nl-string-append (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
+                                                                                                  (vector->list const))
+                                                                                             (encode (vector-length const))
+                                                                                             (encode t_vector)))
+                                                          ;; TODO:
+                                                          ((procedure? const) "")
+                                                          (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const))))))
                                                 (vector->list table))))))))
 
 (define encode-symbol-table
@@ -2566,7 +2649,7 @@
 (define make-print
   (let* ((^skip-label (label-generator "skip_print_"))
          (prologue "\n")
-         (epilogue (lambda (skip-label) (nl-string-append 
+         (epilogue (lambda (skip-label) (nl-string-append
                                          ;; "INFO"
                                          ;; "SHOW(\"SP\", SP);"
                                          (>cmp r0 sob-void)
@@ -2584,7 +2667,7 @@
 
 ;;;; final interface for compiling files from Scheme to C 
 ;;
-;; 
+;;
 (define prologue "
 /* change to 0 for no debug info to be printed: */
 #define DO_SHOW 1
@@ -2627,19 +2710,19 @@ return 0;
                         (parse sexpr)))))))
                  sexprs))
 
-           
-           
+
+
            (tables (get-tables pes))
            (sym-tbl (car tables))
            (consts (list->vector (cadr tables)))
            (consts-table-n-length (create-const-table-indexes consts))
            (indexed-const-table (vector->list (car consts-table-n-length)))
            (const-table-length (number->string (cdr consts-table-n-length)))
-           
+
            (fvars (list->vector (collect-defined-fvars pes)))
            ;; TODO: fvars-table-length might change when we add assembly library functions
            (fvars-table-length (number->string (vector-length fvars)))
-           
+
 
 
            (generated-code (fold-left string-append "" (map (lambda (pe) (make-print (code-gen pe sym-tbl fvars indexed-const-table))) pes)))
@@ -2650,8 +2733,18 @@ return 0;
                                           (>nl (>define SYMBOL_TABLE_BASE_ADDR (base+displ FVARS_TABLE_BASE_ADDR fvars-table-length)))
                                           (encode-const-table CONST_TABLE_BASE_ADDR consts indexed-const-table sym-tbl)
                                           (encode-symbol-table SYMBOL_TABLE_BASE_ADDR sym-tbl indexed-const-table)
-                                          generated-code))
 
+                                          (generate-constants-macro indexed-const-table)
+                                          (>nl (>define DUMMY_ENV DUMMY_ENV_ACTUAL_ADDRESS))
+                                          (>nl (string-append-list (generate-predicates (vector->list fvars))))
+
+                                          generated-code))
+#|
+           
+           (generated-code (string-append (>nl (>define DUMMY_ENV DUMMY_ENV_ACTUAL_ADDRESS))
+                                          (>nl (string-append-list (generate-predicates (vector->list fvars))))
+                                          generated-code))
+|#           
            #|
            (generated-code (string-append (generate-table-code consts
                                                                "1000" ; actual const table address
