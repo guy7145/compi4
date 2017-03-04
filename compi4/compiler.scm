@@ -2570,18 +2570,98 @@
               (>call "MAKE_SOB_INTEGER")
               (>drop "1")
               )))
-
 (define vector-length-encoder string-length-encoder)
 
-
-(define vector-ref-encode
+(define char->integer-encoder
   (lambda () (>>scheme-function
               
-              (>mov R0 (>>arg "0")) ; vector
-              (>mov R1 (>>arg "1")) ; index
-              (>mov R0 (>indd R0 R1))
-              
+              (>mov R0 (>>arg "0"))
+              (>mov R0 (>indd R0 "1"))
+              (>push R0)
+              (>call "MAKE_SOB_INTEGER")
+              (>drop "1")
               )))
+
+(define integer->char-encoder
+  (lambda () (>>scheme-function
+              
+              (>mov R0 (>>arg "0"))
+              (>mov R0 (>indd R0 "1"))              
+              
+              (>push R0)
+              (>call "MAKE_SOB_CHAR")
+              (>drop "1")
+              )))
+
+(define string-ref-encoder
+  (lambda () (>>scheme-function
+              
+              (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
+              (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
+              (>mov R1 (>indd R1 "1"))
+              (>mov R0 (>indd R0 (base+displ "2" R1)))
+              
+              (>push R0)
+              (>call "MAKE_SOB_CHAR")
+              (>drop "1")
+              )))
+
+(define vector-ref-encoder
+  (lambda () (>>scheme-function
+              (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
+              (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
+              (>mov R1 (>indd R1 "1"))
+              (>mov R0 (>indd R0 (base+displ "2" R1)))
+              )))
+
+(define string-set!-encoder
+  (lambda () (>>scheme-function
+              
+              (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
+              (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
+              (>mov R2 (>>arg "2")) ; R2 is SOB_CHAR
+              
+              (>mov R1 (>indd R1 "1")) ; R1 is integer
+              (>mov R2 (>indd R2 "1")) ; R2 is character
+              
+              (>mov (>indd R0 (base+displ "2" R1)) R2)
+              (>mov R0 sob-void)
+              )))
+
+(define vector-set!-encoder
+  (lambda () (>>scheme-function
+              
+              (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
+              (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
+              (>mov R2 (>>arg "2")) ; R2 is some SOB
+              
+              (>mov R1 (>indd R1 "1")) ; R1 is integer
+              
+              (>mov (>indd R0 (base+displ "2" R1)) R2)
+              (>mov R0 sob-void)
+              )))
+
+
+(define zero?-encoder
+  (lambda ()
+    (let ((label-eq "LIB_ZERO_EQUAL")
+          (label-exit "LIB_ZERO_EXIT"))
+      (>>scheme-function
+
+       (>mov R0 (>>arg "0"))
+       (>mov R0 (>indd R0 "1"))
+       
+       (>cmp R0 (>imm "0"))
+       (>jeq label-eq)
+       
+       (>mov R0 sob-false)
+       (>jmp label-exit)
+       
+       (>make-label label-eq)
+       (>mov R0 sob-true)
+       
+       (>make-label label-exit)
+       ))))
 
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
@@ -2591,6 +2671,12 @@
                             (set-cdr! . ,set-cdr!-encoder)
                             (string-length . ,string-length-encoder)
                             (vector-length . ,vector-length-encoder)
+                            (char->integer . ,char->integer-encoder)
+                            (integer->char . ,integer->char-encoder)
+                            (string-ref . ,string-ref-encoder)
+                            (vector-ref . ,vector-ref-encoder)
+                            (zero? . ,zero?-encoder)
+                            (string-set! . ,string-set!-encoder)
                             ))
 
 (define dummy-value "some_dummy_value")
@@ -2635,7 +2721,6 @@
                                                  (>make-label func-label)
                                                  (ENCODER)
                                                  (>make-label skip-label)
-
                                                  ;; return void?
                                                  (>mov R0 sob-void))))))
 
@@ -2804,9 +2889,7 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
-
-
-
+           
            (tables (get-tables pes))
            (sym-tbl (car tables))
            (consts (list->vector (cadr tables)))

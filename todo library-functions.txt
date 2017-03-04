@@ -18,23 +18,30 @@ DONE: 	(still needs to be tested)
 
 	string-length
 	vector-length
+	
+	vector-set!
+	string-set!
 
-TODO:	scheme-
-		
+	string-ref	
+	vector-ref	
+	
+	char->integer
+	integer->char
+	zero?
+
+	not
+	eq?
+
+	denominator
+	numerator
+	remainder
+
+TODO:	scheme-	number?
+		map
+		list (variadic)
+		append (variadic)
+
 	cisc-
-		char->integer
-		integer->char
-		vector-ref
-		vector-set!
-		string-ref
-		string-set!
-
-
-
-zero?
-number?
-
-append (variadic)
 
 apply
 
@@ -46,21 +53,9 @@ apply
 * (variadic)
 - (variadic)
 
-denominator
-numerator
-remainder
-
-eq?
-
-list (variadic)
-
 make-string
 make-vector
 vector
-
-map
-
-not
 
 string->symbol
 symbol->string
