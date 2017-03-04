@@ -2573,6 +2573,16 @@
 
 (define vector-length-encoder string-length-encoder)
 
+
+(define vector-ref-encode
+  (lambda () (>>scheme-function
+              
+              (>mov R0 (>>arg "0")) ; vector
+              (>mov R1 (>>arg "1")) ; index
+              (>mov R0 (>indd R0 R1))
+              
+              )))
+
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
                             (cdr  . ,cdr-encoder)
