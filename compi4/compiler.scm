@@ -2476,7 +2476,10 @@
               pred-names-types-and-labels)))
 
 (define <initial-fvar-tbl>
-  (retrieve-lib-predicate-functions))
+  `((car ,dummy-value) 
+    (cdr ,dummy-value) 
+    (cons ,dummy-value) 
+    ,@(retrieve-lib-predicate-functions)))
 
 (define lib-func?
   (lambda (x)
@@ -2544,12 +2547,21 @@
 
 (define cons-encoder
   (lambda () (>>scheme-function
-              (>mov R0 (>>arg "1"))
-              (>push R0)
-              (>mov R0 (>>arg "2"))
-              (>push R0)
-              (>call "MAKE_SOB_PAIR")
-              (>drop "2")
+              
+              (>push R1)
+              (>push R2)
+              
+              (>mov R1 (>>arg "1"))
+              (>mov R2 (>>arg "2"))
+              
+              (>mov-res R0 (>malloc "3"))
+              (>mov (>indd R0 "0") t_pair)
+              (>mov (>indd R0 "1") R1)
+              (>mov (>indd R0 "2") R2)
+              
+              (>pop R2)
+              (>pop R1)
+              
               (>ret)
               )))
 (define car-encoder
@@ -2568,7 +2580,8 @@
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (cons . ,cons-encoder)
                             (car  . ,car-encoder)
-                            (cdr  . ,cdr-encoder)))
+                            (cdr  . ,cdr-encoder)
+                            ))
 (define cisc-lib-encoding
   (let* ((fvar-tbl <initial-fvar-tbl>)
         (^func-label (label-generator "LIB_FUNC_"))
@@ -2594,7 +2607,7 @@
                                                 (>make-label func-label)
                                                 (ENCODER)
                                                 (>make-label skip-label)
-
+                                                
                                                 ;; return void?
                                                 (>mov R0 sob-void))))))
     
