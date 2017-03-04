@@ -2641,28 +2641,7 @@
               (>mov R0 sob-void)
               )))
 
-
-(define zero?-encoder
-  (lambda ()
-    (let ((label-eq "LIB_ZERO_EQUAL")
-          (label-exit "LIB_ZERO_EXIT"))
-      (>>scheme-function
-
-       (>mov R0 (>>arg "0"))
-       (>mov R0 (>indd R0 "1"))
-       
-       (>cmp R0 (>imm "0"))
-       (>jeq label-eq)
-       
-       (>mov R0 sob-false)
-       (>jmp label-exit)
-       
-       (>make-label label-eq)
-       (>mov R0 sob-true)
-       
-       (>make-label label-exit)
-       ))))
-
+(load "max-library-functions.scm")
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
                             (cdr  . ,cdr-encoder)
@@ -2675,8 +2654,8 @@
                             (integer->char . ,integer->char-encoder)
                             (string-ref . ,string-ref-encoder)
                             (vector-ref . ,vector-ref-encoder)
-                            (zero? . ,zero?-encoder)
                             (string-set! . ,string-set!-encoder)
+                            ,@max-library-functions-encoders
                             ))
 
 (define dummy-value "some_dummy_value")

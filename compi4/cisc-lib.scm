@@ -131,6 +131,24 @@
                       (>mov dest R0))))
 
 
+;; arithmentics
+(define >add
+  (lambda (dest src)
+    (string-append "ADD" (>paren (>comma dest src)) ";")))
+(define >sub
+  (lambda (dest src)
+    (string-append "SUB" (>paren (>comma dest src)) ";")))
+(define >mul
+  (lambda (dest src)
+    (string-append "MUL" (>paren (>comma dest src)) ";")))
+(define >div
+  (lambda (dest src)
+    (string-append "DIV" (>paren (>comma dest src)) ";")))
+(define >rem
+  (lambda (dest src)
+    (string-append "REM" (>paren (>comma dest src)) ";")))
+
+
 ;; compare
 (define >compare
   (lambda (x y)
