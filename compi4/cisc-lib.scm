@@ -5,6 +5,10 @@
 (define string-append-list
   (lambda (list)
     (fold-left string-append "" list)))
+
+(define nl-string-append-list
+  (lambda (list)
+    (fold-left nl-string-append "" list)))
 #|
 ;; for debugging purposes ONLY!!!
 (define string-append
@@ -224,17 +228,17 @@
 ;; 
 (define >>scheme-function
   (lambda body (nl-string-append (>push fp)
-                                   (>mov fp sp)
-                                   
-                                   (string-append-list body)
-                                   
-                                   (>mov sp fp)
-                                   (>pop fp)
-                                   (>ret))))
+                                 (>mov fp sp)
 
-(define >>arg 
-  (lambda (i) 
-    (>fparg-nan (base+displ "2" i))))  
+                                 (nl-string-append-list body)
+
+                                 (>mov sp fp)
+                                 (>pop fp)
+                                 (>ret))))
+
+(define >>arg
+  (lambda (i)
+    (>fparg-nan (base+displ "2" i))))
 
 
 

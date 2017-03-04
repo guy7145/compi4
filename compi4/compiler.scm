@@ -2476,9 +2476,9 @@
               pred-names-types-and-labels)))
 
 (define <initial-fvar-tbl>
-  `((car ,dummy-value) 
-    (cdr ,dummy-value) 
-    (cons ,dummy-value) 
+  `((car ,dummy-value)
+    (cdr ,dummy-value)
+    (cons ,dummy-value)
     ,@(retrieve-lib-predicate-functions)))
 
 (define lib-func?
@@ -2548,21 +2548,13 @@
 (define cons-encoder
   (lambda () (>>scheme-function
               
-              (>push R1)
-              (>push R2)
+              (>mov R0 (>>arg "1"))
+              (>push R0)
+              (>mov R0 (>>arg "0"))
+              (>push R0)
+              (>call "MAKE_SOB_PAIR")
+              (>drop "2")
               
-              (>mov R1 (>>arg "1"))
-              (>mov R2 (>>arg "2"))
-              
-              (>mov-res R0 (>malloc "3"))
-              (>mov (>indd R0 "0") t_pair)
-              (>mov (>indd R0 "1") R1)
-              (>mov (>indd R0 "2") R2)
-              
-              (>pop R2)
-              (>pop R1)
-              
-              (>ret)
               )))
 (define car-encoder
   (lambda () (>>scheme-function
@@ -2578,40 +2570,40 @@
 
 
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
-                            (cons . ,cons-encoder)
                             (car  . ,car-encoder)
                             (cdr  . ,cdr-encoder)
+                            (cons . ,cons-encoder)
                             ))
 (define cisc-lib-encoding
   (let* ((fvar-tbl <initial-fvar-tbl>)
-        (^func-label (label-generator "LIB_FUNC_"))
-        (^skip-label (label-generator "L_GENERATE_PREDICATES_SKIP_LABEL_"))
-        (lib-func-encoder (lambda (name-encoder)
-                            (let* ((name (car name-encoder))
-                                   (ENCODER (cdr name-encoder))
-                                   (offset-in-tbl (search-fvar-index-by-name fvar-tbl name))
-                                   (func-label (^func-label))
-                                   (skip-label (^skip-label)))
-                              (nl-string-append (>comment  (format "library-function: ~s" name))
+         (^func-label (label-generator "LIB_FUNC_"))
+         (^skip-label (label-generator "L_GENERATE_LIBRARY_FUNCTIONS_SKIP_LABEL_"))
+         (lib-func-encoder (lambda (name-encoder)
+                             (let* ((name (car name-encoder))
+                                    (ENCODER (cdr name-encoder))
+                                    (offset-in-tbl (search-fvar-index-by-name fvar-tbl name))
+                                    (func-label (^func-label))
+                                    (skip-label (^skip-label)))
+                               (nl-string-append (>comment  (format "library-function: ~s" name))
 
-                                                ;; create the closure object
-                                                (>mov-res R0 (>malloc "3"))
-                                                (>mov (>indd R0 "0") t_closure)               ; t_closure
-                                                (>mov (>indd R0 "1") DUMMY_ENV)               ; env
-                                                (>mov (>indd R0 "2") (>get-label func-label)) ; code-pointer
-                                                ;; mov address of the sob to the table
-                                                (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string offset-in-tbl)) R0)
+                                                 ;; create the closure object
+                                                 (>mov-res R0 (>malloc "3"))
+                                                 (>mov (>indd R0 "0") t_closure)               ; t_closure
+                                                 (>mov (>indd R0 "1") DUMMY_ENV)               ; env
+                                                 (>mov (>indd R0 "2") (>get-label func-label)) ; code-pointer
+                                                 ;; mov address of the sob to the table
+                                                 (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string offset-in-tbl)) R0)
 
-                                                ;; create lambda body
-                                                (>jmp skip-label)
-                                                (>make-label func-label)
-                                                (ENCODER)
-                                                (>make-label skip-label)
-                                                
-                                                ;; return void?
-                                                (>mov R0 sob-void))))))
-    
-     (string-append-list (map lib-func-encoder cisc-lib-encoders))))
+                                                 ;; create lambda body
+                                                 (>jmp skip-label)
+                                                 (>make-label func-label)
+                                                 (ENCODER)
+                                                 (>make-label skip-label)
+
+                                                 ;; return void?
+                                                 (>mov R0 sob-void))))))
+
+    (string-append-list (map lib-func-encoder cisc-lib-encoders))))
 
 
 ;; _________compile-scheme-file____________________________________
