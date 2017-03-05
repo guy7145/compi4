@@ -2529,14 +2529,14 @@
 
 (define cons-encoder
   (lambda () (>>scheme-function
-              
+
               (>mov R0 (>>arg "1"))
               (>push R0)
               (>mov R0 (>>arg "0"))
               (>push R0)
               (>call "MAKE_SOB_PAIR")
               (>drop "2")
-              
+
               )))
 (define car-encoder
   (lambda () (>>scheme-function
@@ -2550,13 +2550,13 @@
               (>mov R0 (>indd R0 "2"))
               )))
 
-(define set-car!-encoder 
+(define set-car!-encoder
   (lambda () (>>scheme-function
               (>mov R0 (>>arg "0"))
               (>mov (>indd R0 "1") (>>arg "1"))
               )))
 
-(define set-cdr!-encoder 
+(define set-cdr!-encoder
   (lambda () (>>scheme-function
               (>mov R0 (>>arg "0"))
               (>mov (>indd R0 "2") (>>arg "1"))
@@ -2574,9 +2574,10 @@
 
 (define char->integer-encoder
   (lambda () (>>scheme-function
-              
+
               (>mov R0 (>>arg "0"))
               (>mov R0 (>indd R0 "1"))
+
               (>push R0)
               (>call "MAKE_SOB_INTEGER")
               (>drop "1")
@@ -2584,23 +2585,77 @@
 
 (define integer->char-encoder
   (lambda () (>>scheme-function
-              
+
               (>mov R0 (>>arg "0"))
-              (>mov R0 (>indd R0 "1"))              
-              
+              (>mov R0 (>indd R0 "1"))
+
               (>push R0)
               (>call "MAKE_SOB_CHAR")
               (>drop "1")
               )))
 
+(define symbol->string-encoder
+  (lambda () (>>scheme-function
+              (>mov R0 (>>arg "0"))
+              (>mov R0 (>indd R0 "1"))
+              )))
+
+(define string->symbol-encoder
+  (let ((^exit-label (label-generator "string_to_symbol_exit_label_"))
+        (compare-symbol-and-string
+         (let ((^dit-label (label-generator "compare_symbol_and_string_cond_dit_"))
+               (^cond-exit-label (label-generator "compare_symbol_and_string_cond_exit_")))
+           (lambda (<dit> <dif>)
+             (let ((dit-label (^dit-label))
+                   (cond-exit-label (^cond-exit-label)))
+               (nl-string-append (>jeq dit-label)
+                                 <dif>
+                                 (>jmp cond-exit-label)
+                                 (>make-label dit-label)
+                                 <dit>
+                                 (>make-label cond-exit-label)
+                                 ))))))
+    (lambda ()
+      (let ((exit-label (^exit-label)))
+        (>>scheme-function                                  ;                | we need this
+         (>mov R0 (>>arg "0"))                              ;                v
+         (>for-loop (base+displ SYMBOL_TABLE_BASE_ADDR "1") ; [t_symbol | rep_str ]
+                    (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
+                    >inc-twice
+                    >jge
+                    (>cmp R0 (>indd SYMBOL_TABLE_BASE_ADDR loop-counter))
+                    (compare-symbol-and-string
+                     (nl-string-append (>dec loop-counter)
+                                       (>mov R0 (>imm (base+displ loop-counter SYMBOL_TABLE_BASE_ADDR)))
+                                       (>jmp exit-label)
+                                       )
+                     ""  ;; nothing to do if false
+                     ))
+
+         ;; encode new symbol into the symbol table
+         (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) R0)
+         (>dec loop-counter)
+         (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) t_symbol)
+         ;; mov symbol to R0 
+         (>mov R0 (>imm (base+displ SYMBOL_TABLE_BASE_ADDR loop-counter)))
+         ;; increment sym-tbl length counter
+         (>mov R7 (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR))
+         (>inc R7)
+         (>mov (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR) R7) ;; R7 is loop-counter
+         ;; exit label
+         (>make-label exit-label)
+         
+         )))))
+
+
 (define string-ref-encoder
   (lambda () (>>scheme-function
-              
+
               (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
               (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
               (>mov R1 (>indd R1 "1"))
               (>mov R0 (>indd R0 (base+displ "2" R1)))
-              
+
               (>push R0)
               (>call "MAKE_SOB_CHAR")
               (>drop "1")
@@ -2616,27 +2671,27 @@
 
 (define string-set!-encoder
   (lambda () (>>scheme-function
-              
+
               (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
               (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
               (>mov R2 (>>arg "2")) ; R2 is SOB_CHAR
-              
+
               (>mov R1 (>indd R1 "1")) ; R1 is integer
               (>mov R2 (>indd R2 "1")) ; R2 is character
-              
+
               (>mov (>indd R0 (base+displ "2" R1)) R2)
               (>mov R0 sob-void)
               )))
 
 (define vector-set!-encoder
   (lambda () (>>scheme-function
-              
+
               (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
               (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
               (>mov R2 (>>arg "2")) ; R2 is some SOB
-              
+
               (>mov R1 (>indd R1 "1")) ; R1 is integer
-              
+
               (>mov (>indd R0 (base+displ "2" R1)) R2)
               (>mov R0 sob-void)
               )))
@@ -2650,16 +2705,16 @@
 
        (>mov R0 (>>arg "0"))
        (>mov R0 (>indd R0 "1"))
-       
+
        (>cmp R0 (>imm "0"))
        (>jeq label-eq)
-       
+
        (>mov R0 sob-false)
        (>jmp label-exit)
-       
+
        (>make-label label-eq)
        (>mov R0 sob-true)
-       
+
        (>make-label label-exit)
        ))))
 
@@ -2677,6 +2732,8 @@
                             (vector-ref . ,vector-ref-encoder)
                             (zero? . ,zero?-encoder)
                             (string-set! . ,string-set!-encoder)
+                            (symbol->string . ,symbol->string-encoder)
+                            (string->symbol . ,string->symbol-encoder)
                             ))
 
 (define dummy-value "some_dummy_value")
@@ -2806,7 +2863,8 @@
                 (lambda (val)
                   (>nl (>mov (>indd base-addr (number->string (counter))) val)))))
         (string-append (>nl (>comment "encode-symbol-table"))
-                       (string-append-list (map (lambda (sym) (string-append (encode (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-const-table (symbol->string sym)))))
+                       (string-append-list (map (lambda (sym) (string-append (encode (base+displ CONST_TABLE_BASE_ADDR
+                                                                                                 (number->string (get-const-offset indexed-const-table (symbol->string sym)))))
                                                                              (>nl (encode t_symbol))))
                                                 table)))))))
 
@@ -2889,7 +2947,7 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
-           
+
            (tables (get-tables pes))
            (sym-tbl (car tables))
            (consts (list->vector (cadr tables)))
@@ -2909,12 +2967,13 @@ return 0;
            (generated-code (string-append (>nl (>define CONST_TABLE_BASE_ADDR CONST_TABLE_ACTUAL_ADDRESS))
                                           (>nl (>define FVARS_TABLE_BASE_ADDR (base+displ CONST_TABLE_BASE_ADDR const-table-length)))
                                           (>nl (>define SYMBOL_TABLE_BASE_ADDR (base+displ FVARS_TABLE_BASE_ADDR fvars-table-length)))
+                                          (>nl (>define SYMBOL_TABLE_LENGTH_COUNTER_ADDR SYMBOL_TABLE_LENGTH_COUNTER_ACTUAL_ADDR))
+                                          (>nl (>mov (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR) (>imm (number->string (* 2 (length sym-tbl))))))
                                           (encode-const-table CONST_TABLE_BASE_ADDR consts indexed-const-table sym-tbl)
                                           (encode-symbol-table SYMBOL_TABLE_BASE_ADDR sym-tbl indexed-const-table)
 
                                           (generate-constants-macro indexed-const-table)
                                           (>nl (>define DUMMY_ENV DUMMY_ENV_ACTUAL_ADDRESS))
-
                                           cisc-lib-encoding
                                           nl
 
