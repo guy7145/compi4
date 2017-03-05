@@ -127,7 +127,7 @@
 (define max-library-functions-encoders
 	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
-	  (denomenator . ,denomenator-encoder)
+	  (denominator . ,denomenator-encoder)
 	  (numerator . ,numerator-encoder)
 	  (remainder . ,remainder-encoder)
 	  (apply . ,apply-encoder)
