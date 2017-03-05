@@ -177,6 +177,9 @@
 (define >jle
   (lambda (label)
     (>func "JUMP_LE" label)))
+(define >jlt
+  (lambda (label)
+    (>func "JUMP_LT" label)))
 
 ;; labels
 (define >make-label

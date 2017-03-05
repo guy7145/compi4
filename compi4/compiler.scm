@@ -2221,27 +2221,68 @@
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
-                                                    "INFO"
-                                                    ;; drop sp in order to override old frame
-                                                    (>sub sp (base+displ num-of-args "2")) 
                                                     
-                                                    ;; re-push evaluated arguments
+                                                    (>push (>imm "0"))
+                                                    
+                                                    ;; push evaluated arguments
                                                     (string-append-list 
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
                                                           exprs))
-                                                    ;; re-push evaluated arguments
+                                                    
+                                                    ;; push number of arguments
                                                     (>push num-of-args)
-                                                    ;; generate retrieve lambda-sob
+                                                    
+                                                    ;; retrieve lambda-sob
                                                     (code-gen major func)
+                                                    
                                                     ;; push env
                                                     (>push (>indd R0 "1"))
-                                                    ;; change fp to the old fp
+                                                    
+                                                    ;;
+                                                    (>push (>fparg-nan "-1"))
+                                                    
+                                                    #|;; change fp to the old fp
                                                     (>add sp "2") ; skip ret-addr and old-fp (without overriding it)
                                                     (>pop R1)     ; pop old-fp into R1
                                                     (>mov fp R1)  ; mov old-fp into fp
-                                                    ;; jump to the lambda's body label
+                                                    |#
+                                                    
+                                                    ;; fix stack frame
+                                                    (>mov R2 (>fparg-nan "-2"))
+                                                    (>mov R4 fp)
+                                                    (>sub R4 sp)
+                                                    (>sub R4 (>imm "2"))
+                                                    (>mov R3 (>fparg 1))
+                                                    (>add R3 (>imm "4"))
+                                                    (>mov sp fp)
+                                                    (>sub sp R3)         
+                                                    ;; for (r5="-3"; r5 >= r4; r5--)
+                                                    ;;         push fparg(r5)
+                                                    (>for-loop "-3"
+                                                               R4
+                                                               >dec
+                                                               >jlt
+                                                               (>push (>fparg-nan loop-counter))
+                                                               )
+                                                    
+                                                    #|
+                                                    ; loop until R4 = SP
+                                                    
+                                                    (>mov r5 (>imm "-3"))
+                                                    (>make-label "fix_loop")
+                                                    (>cmp r5 r4)
+                                                    (>jlt "tc_app_end")
+                                                    (>push (>fparg-nan r5))
+                                                    (>dec r5)
+                                                    (>jmp "fix_loop")
+                                                    (>make-label "tc_app_end")
+                                                    |#
+                                                    
+                                                    
+                                                    (>mov fp R2)
                                                     ;"INFO"
+                                                    ;; jump to the lambda's body label
                                                     (>jmp-a (>indd R0 "2"))
                                                     ))))
 
@@ -2708,7 +2749,6 @@
 
 (define string-set!-encoder
   (lambda () (>>scheme-function
-
               (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
               (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
               (>mov R2 (>>arg "2")) ; R2 is SOB_CHAR
@@ -2754,6 +2794,30 @@
 
        (>make-label label-exit)
        ))))
+
+(define +-encoder
+  (lambda ()
+    (let ((num-of-args R2))
+    (>>scheme-function
+     
+     (>mov num-of-args (>fparg "1"))
+     (>mov R0 "0")
+     ;; for (...) { body }
+     (>for-loop "2"                          ; i = 2 
+                (base+displ num-of-args "2") ; i < num-of-args + 2
+                >inc                         ; i++
+                >jge                         ; (for i-- it would be >jle... you get it)
+                ;; loop body:
+                (>mov R1 (>fparg-nan loop-counter))
+                (>add r0 r1)
+                )
+     
+     (>push r0)
+     (>call "MAKE_SOB_INTEGER")
+     (>drop "1")
+     
+     ))))
+
 (load "max-library-functions.scm")
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
@@ -2981,7 +3045,6 @@ return 0;
 (define list (lambda x x))
 (define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
-(define + (lambda x (if (null? x) 0 (bin+ (car x) (apply + (cdr x))))))
 
 ")
 
