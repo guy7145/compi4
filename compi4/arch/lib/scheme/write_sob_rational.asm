@@ -3,16 +3,16 @@ WRITE_SOB_RATIONAL:
   PUSH(FP);
   MOV(FP, SP);
   MOV(R0, FPARG(0));
-
   MOV(R1, INDD(R0, 1));
+  MOV(R2, INDD(R0, 2));
+
   PUSH(R1);
   CALL(WRITE_INTEGER);
 
   PUSH(IMM('/'));
   CALL(PUTCHAR);
   
-  MOV(R1, INDD(R0, 2));
-  PUSH(R1);
+  PUSH(R2);
   CALL(WRITE_INTEGER);
 
   DROP(3);

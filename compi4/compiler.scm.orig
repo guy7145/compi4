@@ -2100,7 +2100,6 @@
                                                      nl
                                                      (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index)))))))))
 
-                             ;; TODO: test
                              (pattern-rule
                               `(fvar ,(? 'v))
                               (lambda (v)
@@ -2140,7 +2139,6 @@
                                                     (>make-label exit_label)
                                                     ))))
 
-                             ;; TODO: test
                              (pattern-rule
                               `(def ,(? 'var-name) ,(? 'val))
                               (lambda (var-name val)
@@ -2150,7 +2148,6 @@
                                                     (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string index)) R0)
                                                     (>mov R0 sob-void)))))
 
-                             ;; TODO: test
                              (pattern-rule
                               `(lambda-simple ,(? 'args list?) ,(? 'body))
                               (lambda (args body)
@@ -2193,7 +2190,6 @@
                                                    major
                                                    code-gen))))
 
-                             ;; TODO: test; error check?
                              (pattern-rule
                               `(applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
@@ -2221,7 +2217,32 @@
                              ;; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
-                              (lambda (func exprs) ""))
+                              (lambda (func exprs)
+                                (let ((num-of-args (number->string (length exprs)))
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
+                                                    
+                                                    ;; drop sp in order to override old frame
+                                                    (>sub sp (base+displ num-of-args "2")) 
+                                                    
+                                                    ;; re-push evaluated arguments
+                                                    (string-append-list 
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
+                                                    ;; re-push evaluated arguments
+                                                    (>push num-of-args)
+                                                    ;; generate retrieve lambda-sob
+                                                    (code-gen major func)
+                                                    ;; push env
+                                                    (>push (>indd R0 "1"))
+                                                    ;; change fp to the old fp
+                                                    (>add sp "2") ; skip ret-addr and old-fp (without overriding it)
+                                                    (>pop R1)     ; pop old-fp into R1
+                                                    (>mov fp R1)  ; mov old-fp into fp
+                                                    ;; jump to the lambda's body label
+                                                    (>jmp-a (>indd R0 "2"))
+                                                    ))))
 
                              (pattern-rule
                               `(or ,(? 'args list?))
@@ -2236,32 +2257,42 @@
                                                                                   args))
                                                  exit-label ":"))))
 
-                             ;; TODO: test
                              ;; TODO: fix (fvar, bvar)
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
+                              (let ((pvar-body-gen (lambda (minor) 
+                                                     (>mov (>fparg-displ 2 minor) r0)))
+                                    (bvar-body-gen (lambda (major minor) 
+                                                     (nl-string-append (>mov (>fparg-displ 2 minor) r0)
+                                                                       (>mov (>fparg-displ 2 minor) r0)
+                                                                       )
+                                                     )))
                               (lambda (var val)
-                                (let ((r0->fparg ((pattern-rule
-                                                   `(pvar ,(? 'v) ,(? 'minor))
-                                                   (lambda (v minor) (>mov (>fparg-displ 2 minor) r0))) var (lambda () (error 'code-gen (format "set: unrecognized pvar: ~s" var))))))
-                                  (string-append (>comment (format "set ~s ~s" var val))
+                                (let ((var-type (car var)))
+                                  (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
                                                  nl
-                                                 r0->fparg
+                                                 (cond ((equal? var-type 'fvar) (pvar-body-gen (cadr var)))
+                                                       ((equal? var-type 'bvar) "")
+                                                       ((equal? var-type 'pvar) "")
+                                                       (else (error 'code-gen "(set) this shouldn't happen")))
                                                  (>mov r0 (>imm sob-void))
-                                                 nl))))
+                                                 nl)))))
 
-                             ;; TODO test
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
                               (lambda (exprs)
                                 (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs))))
-
-                             ;; TODO:
+                             
                              (pattern-rule
                               `(box ,(? 'var))
-                              (lambda (var) ""))
+                              (lambda (var)
+                                (string-append (>comment (format "box ~s" var))
+                                               nl
+                                               (code-gen major var)
+                                               (>mov r1 r0)
+                                               (>mov-res r0 (>malloc "1"))
+                                               (>mov (>ind r0) r1))))
 
-                             ;; TODO: test
                              (pattern-rule
                               `(box-get ,(? 'var))
                               (lambda (var)
@@ -2270,10 +2301,14 @@
                                                (code-gen major var)
                                                (>mov r0 (>ind r0)))))
 
-                             ;; TODO:
                              (pattern-rule
                               `(box-set ,(? 'var) ,(? 'val))
-                              (lambda (var val) ""))
+                              (lambda (var val) (string-append (>comment (format "box-set ~s ~s" var val))
+                                                               nl
+                                                               (code-gen major var)
+                                                               (>mov r1 r0)
+                                                               (code-gen major val)
+                                                               (>mov (>ind r1) r0))))
 
                              ) e cont))))
                  code-gen)))))
@@ -2417,7 +2452,8 @@
                                                     ((symbol? const) '???)
                                                     ((vector? const) (+ 2 (vector-length const)))
                                                     ((procedure? const)    3)
-                                                    (else (error 'encode-const-table_offset: (format "cant decide type of argument: ~s" const))))))
+                                                    ((rational? const) 3)
+                                                    (else (error 'encode-const-table-offset (format "cant decide type of argument: ~s" const))))))
                        (cons old-offset const)))
                    table)
        offset))))
@@ -2696,7 +2732,6 @@
               (>mov R0 sob-void)
               )))
 
-<<<<<<< HEAD
 
 (define zero?-encoder
   (lambda ()
@@ -2718,10 +2753,7 @@
 
        (>make-label label-exit)
        ))))
-
-=======
 (load "max-library-functions.scm")
->>>>>>> c3919bae780f36e4e4372066dd90172ddb81b546
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
                             (cdr  . ,cdr-encoder)
@@ -2734,13 +2766,11 @@
                             (integer->char . ,integer->char-encoder)
                             (string-ref . ,string-ref-encoder)
                             (vector-ref . ,vector-ref-encoder)
+                            (zero? . ,zero?-encoder)
                             (string-set! . ,string-set!-encoder)
-<<<<<<< HEAD
                             (symbol->string . ,symbol->string-encoder)
                             (string->symbol . ,string->symbol-encoder)
-=======
                             ,@max-library-functions-encoders
->>>>>>> c3919bae780f36e4e4372066dd90172ddb81b546
                             ))
 
 (define dummy-value "some_dummy_value")
@@ -2849,17 +2879,20 @@
                                                                                    (string->list const)))
                                                                              (encode (>imm (number->string (string-length const))))
                                                                              (encode t_string)))
-
-                                                          ;; TODO:
-                                                          ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
-                                                          ;; TODO: fix
+                                                          
                                                           ((vector? const) (nl-string-append (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
                                                                                                   (vector->list const))
-                                                                                             (encode (vector-length const))
+                                                                                             (encode (vector-length const)) ;; TODO: number->string 
                                                                                              (encode t_vector)))
-                                                          ;; TODO:
-                                                          ((procedure? const) "")
-                                                          (else (error 'encode-const-table: (format "cant decide type of argument: ~s" const))))))
+                                                          
+                                                          ((rational? const) (nl-string-append (encode (>imm (number->string (denominator const))))
+                                                                                               (encode (>imm (number->string (numerator const))))
+                                                                                               (encode t_rational)))
+
+                                                          ((procedure? const) "ERROR_WTF_SHOULDN'T_HAPPEN_2")
+                                                          ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
+                                                          
+                                                          (else (error 'encode-const-table (format "cant decide type of argument: ~s" const))))))
                                                 (vector->list table))))))))
 
 (define encode-symbol-table
@@ -2895,7 +2928,10 @@
   (let* ((^skip-label (label-generator "skip_print_"))
          (prologue "\n")
          (epilogue (lambda (skip-label) (nl-string-append
+<<<<<<< HEAD
                                          ;; "INFO"
+=======
+>>>>>>> 0366707a7c09e9310550062aa50f077fc0082b92
                                          ;; "SHOW(\"SP\", SP);"
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
@@ -2941,9 +2977,19 @@ return 0;
 }
 ")
 
+(define scheme-written-lib-functions
+"
+
+(define list (lambda x x))
+(define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+(define number? (lambda (n) (or (integer? n) (rational? n))))
+
+")
+
 (define compile-scheme-file
   (lambda (source dest)
     (let* ((code-text (file->string source))
+           (code-text (string-append scheme-written-lib-functions code-text))
            (sexprs (string->sexpr code-text (lambda (w) (error 'string->sexpr (format "input is not a legal symbolic expression: ~s" w)))))
            (pes
             (map (lambda (sexpr)
