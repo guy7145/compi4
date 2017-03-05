@@ -2119,8 +2119,8 @@
                                 (nl-string-append
                                  (>comment (format "bvar ~s ~s ~s" v major minor))
                                  (>mov r0 (>fparg 0))
-                                 (>mov r0 (>indd r0 major))
-                                 (>mov r0 (>indd r0 minor)))))
+                                 (>mov r0 (>indd r0 (number->string major)))
+                                 (>mov r0 (>indd r0 (number->string minor))))))
 
                              (pattern-rule
                               `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
@@ -2300,22 +2300,35 @@
                                                  exit-label ":"))))
 
                              ;; TODO: fix (fvar, bvar)
+                           #|
+                             `(fvar ,(? 'v))
+                             `(pvar ,(? 'v) ,(? 'minor))
+                             `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
+                             |#
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
-                              (let ((pvar-body-gen (lambda (minor) 
+                              (let ((pvar-body-gen (lambda (minor)
                                                      (>mov (>fparg-displ 2 minor) r0)))
-                                    (bvar-body-gen (lambda (major minor) 
-                                                     (nl-string-append (>mov (>fparg-displ 2 minor) r0)
-                                                                       (>mov (>fparg-displ 2 minor) r0)
+                                    (bvar-body-gen (lambda (major minor)
+                                                     (nl-string-append (>mov r1 (>fparg 0))       ; env   (get)
+                                                                       (>mov r1 (>indd r0 (number->string major))) ; major (get)
+                                                                       (>mov (>indd r1 (number->string minor)) r0) ; minor (set)
                                                                        )
-                                                     )))
+                                                     ))
+                                    (fvar-body-gen (lambda (fvar-name)
+                                                     (let ((fvar-offset (search-fvar-index-by-name fvars fvar-name)))
+                                                     (nl-string-append (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string fvar-offset)) r0)
+                                                                       )
+                                                     ))))
                               (lambda (var val)
                                 (let ((var-type (car var)))
                                   (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
                                                  nl
-                                                 (cond ((equal? var-type 'fvar) (pvar-body-gen (cadr var)))
-                                                       ((equal? var-type 'bvar) "")
-                                                       ((equal? var-type 'pvar) "")
+                                                 (code-gen major val)
+                                                 nl
+                                                 (cond ((equal? var-type 'pvar) (pvar-body-gen (caddr var)))
+                                                       ((equal? var-type 'bvar) (bvar-body-gen (caddr var) (cadddr var)))
+                                                       ((equal? var-type 'fvar) (fvar-body-gen (cadr var)))
                                                        (else (error 'code-gen "(set) this shouldn't happen")))
                                                  (>mov r0 (>imm sob-void))
                                                  nl)))))
