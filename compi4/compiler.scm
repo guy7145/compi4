@@ -2913,7 +2913,6 @@
   (let* ((^skip-label (label-generator "skip_print_"))
          (prologue "\n")
          (epilogue (lambda (skip-label) (nl-string-append
-                                         "INFO"
                                          ;; "SHOW(\"SP\", SP);"
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
