@@ -267,6 +267,132 @@
 			(>make-label "op_div_end")
 		)))
 
+(define less-than-encoder
+	(lambda ()
+		(>>scheme-function
+			(>mov R5 sob-true)
+			(>mov R0 (>fparg-nan (>imm "2")))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R3 (>imm "1"))
+			(>cmp (>ind (>fparg-nan (>imm "2"))) "T_RATIONAL")
+			(>jne "LT_OPERATOR_FIRST_IS_INTEGER")
+			(>mov R3 (>fparg-nan (>imm "2")))
+			(>mov R3 (>indd R3 "2"))
+			(>make-label "LT_OPERATOR_FIRST_IS_INTEGER")
+			(>mov R2 (>fparg 1))
+			(>for-loop "3"
+					   (base+displ R2 "2")
+					   >inc
+					   >jge
+					   (>mov R1 (>fparg-nan loop-counter))
+					   (>mov R4 (>imm "1"))
+
+					   (>cmp (>ind R1) "T_RATIONAL")
+					   (>jne "op_lt_integer")
+					   (>mov R4 (>indd R1 "2"))
+					   
+					   (>make-label "op_lt_integer")
+					   (>mov R1 (>indd R1 "1"))
+					   (>mov R6 R0)
+					   (>mov R8 R1)
+					   (>mul R6 R4)
+					   (>mul R8 R3)
+					   (>cmp R6 R8)
+					   (>jlt "op_lt_ok")
+					   (>mov R5 sob-false)
+					   (>jmp "op_lt_end")
+
+					   (>make-label "op_lt_ok")
+					   (>mov R0 R1)
+					   (>mov R3 R4))
+			(>make-label "op_lt_end")
+			(>mov R0 R5)
+		)))
+
+(define greater-than-encoder
+	(lambda ()
+		(>>scheme-function
+			(>mov R5 sob-true)
+			(>mov R0 (>fparg-nan (>imm "2")))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R3 (>imm "1"))
+			(>cmp (>ind (>fparg-nan (>imm "2"))) "T_RATIONAL")
+			(>jne "GT_OPERATOR_FIRST_IS_INTEGER")
+			(>mov R3 (>fparg-nan (>imm "2")))
+			(>mov R3 (>indd R3 "2"))
+			(>make-label "GT_OPERATOR_FIRST_IS_INTEGER")
+			(>mov R2 (>fparg 1))
+			(>for-loop "3"
+					   (base+displ R2 "2")
+					   >inc
+					   >jge
+					   (>mov R1 (>fparg-nan loop-counter))
+					   (>mov R4 (>imm "1"))
+
+					   (>cmp (>ind R1) "T_RATIONAL")
+					   (>jne "op_gt_integer")
+					   (>mov R4 (>indd R1 "2"))
+					   
+					   (>make-label "op_gt_integer")
+					   (>mov R1 (>indd R1 "1"))
+					   (>mov R6 R0)
+					   (>mov R8 R1)
+					   (>mul R6 R4)
+					   (>mul R8 R3)
+					   (>cmp R6 R8)
+					   (>jgt "op_gt_ok")
+					   (>mov R5 sob-false)
+					   (>jmp "op_gt_end")
+
+					   (>make-label "op_gt_ok")
+					   (>mov R0 R1)
+					   (>mov R3 R4))
+			(>make-label "op_gt_end")
+			(>mov R0 R5)
+		)))
+
+(define equals-encoder
+	(lambda ()
+		(>>scheme-function
+			(>mov R5 sob-true)
+			(>mov R0 (>fparg-nan (>imm "2")))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R3 (>imm "1"))
+			(>cmp (>ind (>fparg-nan (>imm "2"))) "T_RATIONAL")
+			(>jne "EQ_OPERATOR_FIRST_IS_INTEGER")
+			(>mov R3 (>fparg-nan (>imm "2")))
+			(>mov R3 (>indd R3 "2"))
+			(>make-label "EQ_OPERATOR_FIRST_IS_INTEGER")
+			(>mov R2 (>fparg 1))
+			(>for-loop "3"
+					   (base+displ R2 "2")
+					   >inc
+					   >jge
+					   (>mov R1 (>fparg-nan loop-counter))
+					   (>mov R4 (>imm "1"))
+
+					   (>cmp (>ind R1) "T_RATIONAL")
+					   (>jne "op_eq_integer")
+					   (>mov R4 (>indd R1 "2"))
+					   
+					   (>make-label "op_eq_integer")
+					   (>mov R1 (>indd R1 "1"))
+					   (>mov R6 R0)
+					   (>mov R8 R1)
+					   (>mul R6 R4)
+					   (>mul R8 R3)
+					   (>cmp R6 R8)
+					   (>jeq "op_eq_ok")
+					   (>mov R5 sob-false)
+					   (>jmp "op_eq_end")
+
+					   (>make-label "op_eq_ok")
+					   (>mov R0 R1)
+					   (>mov R3 R4))
+			(>make-label "op_eq_end")
+			(>mov R0 R5)
+		)))
+
 (define max-library-functions-encoders
 	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
@@ -278,4 +404,7 @@
 	  (- . ,sub-encoder)
 	  (* . ,mul-encoder)
 	  (/ . ,div-encoder)
+	  (< . ,less-than-encoder)
+	  (> . ,greater-than-encoder)
+	  (= . ,equals-encoder)
 	))

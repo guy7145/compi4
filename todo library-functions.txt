@@ -32,6 +32,14 @@ DONE: 	(still needs to be tested)
 	not
 	eq?
 
+	< (variadic) 
+	= (variadic)
+	> (variadic)
+	+ (variadic)
+	/ (variadic)
+	* (variadic)
+	- (variadic)
+
 	denominator
 	numerator
 	remainder
@@ -46,14 +54,6 @@ DONE: 	(still needs to be tested)
 TODO:	scheme-	append (variadic)
 
 	cisc- 	apply (change to tail call)
-
-< (variadic) 
-= (variadic)
-> (variadic)
-+ (variadic)
-/ (variadic)
-* (variadic)
-- (variadic)
 
 make-string
 make-vector

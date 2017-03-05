@@ -46,6 +46,22 @@
 (define r6 R6)
 (define R7 (register-generator))
 (define r7 R7)
+(define R8 (register-generator))
+(define r8 R8)
+(define R9 (register-generator))
+(define r9 R9)
+(define R10 (register-generator))
+(define r10 R10)
+(define R11 (register-generator))
+(define r11 R11)
+(define R12 (register-generator))
+(define r12 R12)
+(define R13 (register-generator))
+(define r13 R13)
+(define R14 (register-generator))
+(define r14 R14)
+(define R15 (register-generator))
+(define r15 R15)
 
 (define fp "FP")
 (define sp "SP")
@@ -180,6 +196,9 @@
 (define >jlt
   (lambda (label)
     (>func "JUMP_LT" label)))
+(define >jgt
+  (lambda (label)
+    (>func "JUMP_GT" label)))
 
 ;; labels
 (define >make-label
