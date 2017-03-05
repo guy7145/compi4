@@ -2221,7 +2221,7 @@
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
-                                                    
+                                                    "INFO"
                                                     ;; drop sp in order to override old frame
                                                     (>sub sp (base+displ num-of-args "2")) 
                                                     
@@ -2241,6 +2241,7 @@
                                                     (>pop R1)     ; pop old-fp into R1
                                                     (>mov fp R1)  ; mov old-fp into fp
                                                     ;; jump to the lambda's body label
+                                                    ;"INFO"
                                                     (>jmp-a (>indd R0 "2"))
                                                     ))))
 
