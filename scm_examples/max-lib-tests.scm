@@ -45,3 +45,8 @@
 (= 1 2)
 (= 12 12 12 12 71)
 (= 12 12 12 12 12)
+(make-string 5 #\a)
+(make-string 6)
+(make-string 7 #\o)
+(make-vector 7 '(a b c))
+(make-vector 9)

@@ -15,8 +15,40 @@
 			(>mov R0 sob-true)
 			(>mov R1 (>>arg "0"))
 			(>mov R2 (>>arg "1"))
+			(>cmp (>ind R1) (>ind R2)) ; compare types
+			(>jne "pred_eq_false")
+
+			(>cmp (>ind R1) t_integer)
+			(>jeq "pred_eq_int")
+			(>cmp (>ind R1) t_rational)
+			(>jeq "pred_eq_rational")
+			(>cmp (>ind R1) t_char)
+			(>jeq "pred_eq_char")
+			(>cmp (>ind R1) t_symbol)
+			(>jeq "pred_eq_symbol")
+			(>jmp "pred_eq_other")
+
+			(>make-label "pred_eq_int")
+			(>make-label "pred_eq_char")
+			(>make-label "pred_eq_symbol")
+			(>cmp (>indd R1 "1") (>indd R2 "1"))
+			(>jne "pred_eq_false")
+			(>jmp "pred_eq_end")
+
+			(>make-label "pred_eq_rational")
+			(>cmp (>indd R1 "1") (>indd R2 "1"))
+			(>jne "pred_eq_false")
+			(>cmp (>indd R1 "2") (>indd R2 "2"))
+			(>jne "pred_eq_false")
+			(>jmp "pred_eq_end")
+
+			(>make-label "pred_eq_other")
+			(>mov R1 (>>arg "0"))
+			(>mov R2 (>>arg "1"))
 			(>cmp R1 R2)
 			(>jeq "pred_eq_end")
+
+			(>make-label "pred_eq_false")
 			(>mov R0 sob-false)
 			(>make-label "pred_eq_end")
 		)))
@@ -393,6 +425,79 @@
 			(>mov R0 R5)
 		)))
 
+(define make-vector-encoder
+	(let 
+		((skip-default-value-assignment "make_vector_skip_default_value_assignment")
+		(end-label "make_vector_end_label"))
+	(lambda () 
+		(>>scheme-function
+			(>mov r3 (>fparg 1))
+			(>cmp r3 (>imm "1"))
+			(>jne skip-default-value-assignment)
+			
+			(>push "0")
+			(>call "MAKE_SOB_INTEGER")
+			(>drop "1")
+			(>mov r2 r0)
+			(>jmp end-label)
+			(>make-label skip-default-value-assignment)
+
+			(>mov r2 (>>arg "1")) ; sob
+
+
+			(>make-label end-label)
+			(>mov r1 (>>arg "0")) ; sob_int
+			(>mov r1 (>indd r1 "1"))
+			
+			(>mov-res r0 (>malloc r1))
+			(>mov (>indd r0 "0") t_vector)
+			(>mov (>indd r0 "1") r1)
+			(>for-loop 
+				r1
+				"0"
+				>dec
+				>jlt
+				(>mov (>indd r0 (base+displ loop-counter "2")) r2)
+				)
+			))
+	))
+
+
+
+(define make-string-encoder
+	(let 
+		((skip-default-value-assignment "make_string_skip_default_value_assignment")
+		(end-label "make_string_end_label"))
+	(lambda () 
+		(>>scheme-function
+			(>mov r3 (>fparg 1))
+			(>cmp r3 (>imm "1"))
+			(>jne skip-default-value-assignment)
+			
+			(>mov r2 (>imm "0"))
+			(>jmp end-label)
+			(>make-label skip-default-value-assignment)
+
+			(>mov r2 (>>arg "1")) ; sob
+			(>mov r2 (>indd r2 "1"))
+
+			(>make-label end-label)
+			(>mov r1 (>>arg "0")) ; sob_int
+			(>mov r1 (>indd r1 "1"))
+			
+			(>mov-res r0 (>malloc r1))
+			(>mov (>indd r0 "0") t_string)
+			(>mov (>indd r0 "1") r1)
+			(>for-loop 
+				r1
+				"0"
+				>dec
+				>jlt
+				(>mov (>indd r0 (base+displ loop-counter "2")) r2)
+				)
+			))
+	))
+
 (define max-library-functions-encoders
 	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
@@ -407,4 +512,6 @@
 	  (< . ,less-than-encoder)
 	  (> . ,greater-than-encoder)
 	  (= . ,equals-encoder)
+	  (make-vector . ,make-vector-encoder)
+	  (make-string . ,make-string-encoder)
 	))
