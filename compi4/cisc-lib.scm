@@ -162,6 +162,9 @@
 (define >jmp
   (lambda (label)
     (>func "JUMP" label)))
+(define >jmp-a
+  (lambda (label)
+    (>func "JUMPA" label)))
 (define >jeq
   (lambda (label)
     (>func "JUMP_EQ" label)))

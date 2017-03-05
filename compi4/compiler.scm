@@ -2218,24 +2218,31 @@
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
-                                (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
-
-#|                                                  (string-append-list
-                                                   (map (lambda (e) (nl-string-append (code-gen major e)
-                                                                                      (>push R0)))
-                                                        exprs))
-                                                  (>push num-of-args)
-
-                                                  (code-gen major func)
-
-                                                  (>push (>indd R0 "1")) ; enviroment
-
-                                                  (>push (>ind sp))
-                                                  (>mov R1 fp)
-
-                                                  (>mov fp R1)
-                                                  (>jmp (>indd R0 "2"))|#
-                                                  )))
+                                (let ((num-of-args (number->string (length exprs)))
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
+                                                    
+                                                    ;; drop sp in order to override old frame
+                                                    (>sub sp (base+displ num-of-args "2")) 
+                                                    
+                                                    ;; re-push evaluated arguments
+                                                    (string-append-list 
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
+                                                    ;; re-push evaluated arguments
+                                                    (>push num-of-args)
+                                                    ;; generate retrieve lambda-sob
+                                                    (code-gen major func)
+                                                    ;; push env
+                                                    (>push (>indd R0 "1"))
+                                                    ;; change fp to the old fp
+                                                    (>add sp "2") ; skip ret-addr and old-fp (without overriding it)
+                                                    (>pop R1)     ; pop old-fp into R1
+                                                    (>mov fp R1)  ; mov old-fp into fp
+                                                    ;; jump to the lambda's body label
+                                                    (>jmp-a (>indd R0 "2"))
+                                                    ))))
 
                              (pattern-rule
                               `(or ,(? 'args list?))
@@ -2253,15 +2260,23 @@
                              ;; TODO: fix (fvar, bvar)
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
+                              (let ((pvar-body-gen (lambda (minor) 
+                                                     (>mov (>fparg-displ 2 minor) r0)))
+                                    (bvar-body-gen (lambda (major minor) 
+                                                     (nl-string-append (>mov (>fparg-displ 2 minor) r0)
+                                                                       (>mov (>fparg-displ 2 minor) r0)
+                                                                       )
+                                                     )))
                               (lambda (var val)
-                                (let ((r0->fparg ((pattern-rule
-                                                   `(pvar ,(? 'v) ,(? 'minor))
-                                                   (lambda (v minor) (>mov (>fparg-displ 2 minor) r0))) var (lambda () (error 'code-gen (format "set: unrecognized pvar: ~s" var))))))
-                                  (string-append (>comment (format "set ~s ~s" var val))
+                                (let ((var-type (car var)))
+                                  (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
                                                  nl
-                                                 r0->fparg
+                                                 (cond ((equal? var-type 'fvar) (pvar-body-gen (cadr var)))
+                                                       ((equal? var-type 'bvar) "")
+                                                       ((equal? var-type 'pvar) "")
+                                                       (else (error 'code-gen "(set) this shouldn't happen")))
                                                  (>mov r0 (>imm sob-void))
-                                                 nl))))
+                                                 nl)))))
 
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
@@ -2913,7 +2928,7 @@
   (let* ((^skip-label (label-generator "skip_print_"))
          (prologue "\n")
          (epilogue (lambda (skip-label) (nl-string-append
-                                         "INFO"
+                                         ;; "INFO"
                                          ;; "SHOW(\"SP\", SP);"
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
