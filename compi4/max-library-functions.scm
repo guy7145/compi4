@@ -76,6 +76,54 @@
 			(>drop R1)
 		)))
 
+(define bin-add-encoder
+	(lambda()
+		(>>scheme-function
+			(>mov R0 (>>arg "0"))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R1 (>>arg "1"))
+			(>mov R1 (>indd R1 "1"))
+			(>add R0 R1)
+			(>push R0)
+			(>call "MAKE_SOB_INTEGER")
+		)))
+
+(define bin-sub-encoder
+	(lambda()
+		(>>scheme-function
+			(>mov R0 (>>arg "0"))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R1 (>>arg "1"))
+			(>mov R1 (>indd R1 "1"))
+			(>sub R0 R1)
+			(>push R0)
+			(>call "MAKE_SOB_INTEGER")
+		)))
+
+(define bin-mul-encoder
+	(lambda()
+		(>>scheme-function
+			(>mov R0 (>>arg "0"))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R1 (>>arg "1"))
+			(>mov R1 (>indd R1 "1"))
+			(>mul R0 R1)
+			(>push R0)
+			(>call "MAKE_SOB_INTEGER")
+		)))
+
+(define bin-div-encoder
+	(lambda()
+		(>>scheme-function
+			(>mov R0 (>>arg "0"))
+			(>mov R0 (>indd R0 "1"))
+			(>mov R1 (>>arg "1"))
+			(>mov R1 (>indd R1 "1"))
+			(>div R0 R1)
+			(>push R0)
+			(>call "MAKE_SOB_INTEGER")
+		)))
+
 (define max-library-functions-encoders
 	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
@@ -83,4 +131,8 @@
 	  (numerator . ,numerator-encoder)
 	  (remainder . ,remainder-encoder)
 	  (apply . ,apply-encoder)
+	  (bin+ . ,bin-add-encoder)
+	  (- . ,bin-sub-encoder)
+	  (* . ,bin-mul-encoder)
+	  (/ . ,bin-div-encoder)
 	))

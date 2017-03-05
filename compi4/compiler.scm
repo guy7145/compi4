@@ -2980,6 +2980,7 @@ return 0;
 (define list (lambda x x))
 (define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
+(define + (lambda x (if (null? x) 0 (bin+ (car x) (apply + (cdr x))))))
 
 ")
 
