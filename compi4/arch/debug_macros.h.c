@@ -14,6 +14,7 @@
   : ((x) == T_PAIR)    ? snprintf(res, 16, "%s", "T_PAIR")                     \
   : ((x) == T_VECTOR)  ? snprintf(res, 16, "%s", "T_VECTOR")                   \
   : ((x) == T_CLOSURE) ? snprintf(res, 16, "%s", "T_CLOSURE")                  \
+  : ((x) == T_RATIONAL) ? snprintf(res, 16, "%s", "T_RATIONAL")                \
   : snprintf(res, 16, "%ld", (x)))
 
 #if DO_SHOW == 0

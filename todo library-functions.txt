@@ -36,14 +36,16 @@ DONE: 	(still needs to be tested)
 	numerator
 	remainder
 
-TODO:	scheme-	number?
-		map
-		list (variadic)
-		append (variadic)
+	string->symbol
+	symbol->string
 
-	cisc-
+	number?
+	map
+	list (variadic)
 
-apply
+TODO:	scheme-	append (variadic)
+
+	cisc- 	apply (change to tail call)
 
 < (variadic) 
 = (variadic)
@@ -56,7 +58,3 @@ apply
 make-string
 make-vector
 vector
-
-string->symbol
-symbol->string
-

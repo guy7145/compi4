@@ -2,13 +2,12 @@ total_tests=0
 tests_passed=0
 tests_failed=0
 for f in $(ls -v AllTests/*/tests/*.scm); do
-  echo "(load \"compiler.scm\") (compile-scheme-file \"$f\" \"out_test.c\")"
   if [ -f "out_test.c" ]; then
     rm "out_test.c"
   fi
   echo "Doing test $f:"
   echo "--------------------------------"
-  echo "(load \"do-not-touch/compiler.scm\") (compile-scheme-file \"$f\" \"out_test.c\")" | scheme -q
+  echo "(load \"compiler.scm\") (compile-scheme-file \"$f\" \"out_test.c\")" | scheme -q
   gcc -o out_test out_test.c
   our=`./out_test`
   total_tests=$((total_tests+1))

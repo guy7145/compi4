@@ -1,17 +1,3 @@
-(define zero?-encoder 
-	(lambda ()
-		(>>scheme-function
-			(>mov R0 (>>arg "0"))
-			(>mov R0 (>indd R0 "1"))
-         	(>cmp R0 (>imm "0"))
-         	(>jne "pred_zero_false")
-         	(>mov R0 sob-true)
-         	(>jmp "pred_zero_end")
-         	(>make-label "pred_zero_false")
-         	(>mov R0 sob-false)
-         	(>make-label "pred_zero_end")
-         )))
-
 (define not-encoder
 	(lambda ()
 		(>>scheme-function
@@ -55,7 +41,7 @@
 			(>drop "1")
 		)))
 
-(define remainder-encoder
+(define remainder-encoder ; TODO: fix
 	(lambda()
 		(>>scheme-function
 			(>mov R0 (>>arg "0"))
@@ -75,24 +61,23 @@
 			(>mov R1 (>>arg "1"))			; args list
 			(>mov R2 (>imm "0"))			; args counter
 			(>make-label "APPLY_LOOP_START")
-			(>cmp R1 sob-nil)				; whie list != null
+			(>cmp R1 sob-nil)			; whie list != null
 			(>jeq "APPLY_LOOP_END")
 			(>push (>indd R1 "1"))			; push car
-			(>add R2 "1")					; counter++
+			(>add R2 "1")				; counter++
 			(>mov R1 (>indd R1 "2"))		; list++
 			(>jmp "APPLY_LOOP_START")
 			(>make-label "APPLY_LOOP_END")
-			(>push R2)						; push counter
+			(>push R2)				; push counter
 			(>push (>indd R1 "1"))			; push env
 			(>calla (>indd R0 "2"))			; call func
-			(>pop R1) ; env
-			(>pop R1) ; counter
+			(>pop R1) 				; env
+			(>pop R1) 				; counter
 			(>drop R1)
 		)))
 
 (define max-library-functions-encoders
-	`((zero? . ,zero?-encoder)
-	  (not . ,not-encoder)
+	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
 	  (denomenator . ,denomenator-encoder)
 	  (numerator . ,numerator-encoder)
