@@ -142,7 +142,9 @@
 ;; mov
 (define >mov
   (lambda (dest src)
-    (string-append "MOV" (>paren (>comma dest src)) ";")))
+    (if (equal? dest src)
+        nl
+        (string-append "MOV" (>paren (>comma dest src)) ";"))))
 (define >mov-res ;; moves to 'dest' the result of function application 'app'
   (lambda (dest app)
     (nl-string-append app

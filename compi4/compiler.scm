@@ -2084,8 +2084,8 @@
                 R3
                 >inc
                 >jge
-                (>mov (>indd R0 loop-counter)
-                      (>fparg-nan (string-append loop-counter " + 1"))))
+                (>mov (>indd R0 loop-counter) (>>arg loop-counter))
+                )
 
      ;; create lambda_sob object
      (>comment (format "create lambda_sob object:"))
@@ -2456,7 +2456,7 @@
 ;; ________________________________________________________________
 (load "tdd-tools.scm")
 
-(define collect-defined-fvars
+(define scan-fvars
   (lambda (code)
     (fold-left
      (lambda (acc code-line)
@@ -2466,18 +2466,41 @@
      <initial-fvar-tbl>
      code)))
 
+;; TODO: vectors, sort
+(define disassemble-const
+    (lambda (c)
+      (cond ((null? c) c)
+            ((pair? c) (let ((first (car c))
+                             (second (cdr c)))
+                         `(,@(disassemble-const second) ,@(disassemble-const first) ,c)))
+            
+            ((vector? c) `(,@(fold-left 
+                              (lambda (acc obj)
+                                (let ((dis-obj (disassemble-const obj)))
+                                  `(,@acc ,@dis-obj ,obj)))
+                              '()
+                              (vector->list c)) 
+                           ,c))
+                      
+                      
+          (else `(,c)))))
+
+
+
+
+#|;; old (buggy) version
 (define disassemble-const
   (lambda (c)
     (cond ((null? c) c)
-          ((not (list? c)) `(,c))
+          ((not (pair? c)) `(,c))
           (else (let ((first (car c))
                       (rest (cdr c)))
                   `(,@(disassemble-const rest) ,@(disassemble-const first) ,c))))))
-
+|#
 
 
 ;; constructs the symbol and constant table
-;; 
+;;
 (define construct-tables
   (letrec ((^construct-sequence-tables
             (lambda (construct-tables-inner)
@@ -2517,7 +2540,7 @@
                                          (let* ((ds (disassemble-const c))
                                                 (constants (map (lambda (d) (if (symbol? d) (symbol->string d) d)) ds))
                                                 (symbols (fold-left (lambda (acc d) (if (symbol? d) (cons d acc) acc)) '() ds)))
-                                           (cont `(,@sym-tbl ,@symbols) `(,@consts ,@(sort SORT-COMPARATOR constants)))))))
+                                           (cont `(,@sym-tbl ,@symbols) `(,@consts ,@constants))))))
 
                                   ((equal? 'fvar p-name) (cont sym-tbl consts))
 
@@ -3170,9 +3193,8 @@ return 0;
            (consts-table-n-length (create-const-table-indexes consts))
            (indexed-const-table (vector->list (car consts-table-n-length)))
            (const-table-length (number->string (cdr consts-table-n-length)))
-
-           (fvars (list->vector (collect-defined-fvars pes)))
-           ;; TODO: fvars-table-length might change when we add assembly library functions
+           ;; TODO: change scan-vars
+           (fvars (list->vector (scan-fvars pes)))
            (fvars-table-length (number->string (vector-length fvars)))
 
 
