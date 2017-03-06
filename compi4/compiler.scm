@@ -1992,65 +1992,65 @@
 (define stack-fix
   (let ((^l-not-enough-space (label-generator "Stack_fix_L_Not_enough_space_"))
         (^l-done-fixing (label-generator "Stack_fix_L_Done_fixing_")))
-  (lambda (num-of-args)
-    (let ((l-not-enough-space (^l-not-enough-space))
-          (l-done-fixing (^l-done-fixing))
-          (accumulator R6)
-          (actual-num-of-args R5)
-          (list-stack-index (number->string (+ 2 num-of-args)))
-          (last-arg-index (number->string (- num-of-args 1)))
-          (num-of-args (number->string num-of-args)))
-      (nl-string-append
-       
-       ;; pack non-elementary arguments into a list (or sob_nil if there are none)
-       (>mov actual-num-of-args (>fparg 1))
-       (>mov accumulator sob-nil)
-       (>for-loop actual-num-of-args
-                  num-of-args
-                  >dec
-                  >jle
-                  (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1"))))
-                  )
-       
-       ;; jmp to appropriate fix
-       (>cmp actual-num-of-args num-of-args)
-       (>jeq l-not-enough-space)
-       
-       
-       ;; some non-elementary arguments
-       (>drop (base+displ actual-num-of-args "4"))
-       (>push accumulator)
-       (>for-loop (base+displ num-of-args "-1")
-                  "0"
-                  >dec
-                  >jlt
-                  (>push (>>arg loop-counter)))
-       (>push (base+displ num-of-args "1"))
-       (>push (>fparg 0))  ;env
-       (>push (>fparg -1)) ; ret
-       (>push (>fparg -2)) ; fpold
-       (>mov fp sp) ;; fp <- sp
-       (>jmp l-done-fixing)
-       
-       
-       
-       ;; no non-elementary arguments
-       (>make-label l-not-enough-space)
-       (>inc sp)
-       (>mov fp sp)
-       (>for-loop "0"
-                  (base+displ actual-num-of-args "4")
-                  >inc
-                  >jge
-                  (>mov (>starg loop-counter) (>starg (base+displ loop-counter "1")))
-                  )
-       (>mov (>>arg actual-num-of-args) accumulator)
-       (>mov (>fparg 1) (base+displ num-of-args "1"))
-       
-       
-       ;; exit:
-       (>make-label l-done-fixing)
-       )))))
+    (lambda (num-of-args)
+      (let ((l-not-enough-space (^l-not-enough-space))
+            (l-done-fixing (^l-done-fixing))
+            (accumulator R6)
+            (actual-num-of-args R5)
+            (list-stack-index (number->string (+ 2 num-of-args)))
+            (last-arg-index (number->string (- num-of-args 1)))
+            (num-of-args (number->string num-of-args)))
+        (nl-string-append
+
+         ;; pack non-elementary arguments into a list (or sob_nil if there are none)
+         (>mov actual-num-of-args (>fparg 1))
+         (>mov accumulator sob-nil)
+         (>for-loop actual-num-of-args
+                    num-of-args
+                    >dec
+                    >jle
+                    (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1"))))
+                    )
+
+         ;; jmp to appropriate fix
+         (>cmp actual-num-of-args num-of-args)
+         (>jeq l-not-enough-space)
+
+
+         ;; some non-elementary arguments
+         (>drop (base+displ actual-num-of-args "4"))
+         (>push accumulator)
+         (>for-loop (base+displ num-of-args "-1")
+                    "0"
+                    >dec
+                    >jlt
+                    (>push (>>arg loop-counter)))
+         (>push (base+displ num-of-args "1"))
+         (>push (>fparg 0))  ;env
+         (>push (>fparg -1)) ; ret
+         (>push (>fparg -2)) ; fpold
+         (>mov fp sp) ;; fp <- sp
+         (>jmp l-done-fixing)
+
+
+
+         ;; no non-elementary arguments
+         (>make-label l-not-enough-space)
+         (>inc sp)
+         (>mov fp sp)
+         (>for-loop "0"
+                    (base+displ actual-num-of-args "4")
+                    >inc
+                    >jge
+                    (>mov (>starg loop-counter) (>starg (base+displ loop-counter "1")))
+                    )
+         (>mov (>>arg actual-num-of-args) accumulator)
+         (>mov (>fparg 1) (base+displ num-of-args "1"))
+
+
+         ;; exit:
+         (>make-label l-done-fixing)
+         )))))
 
 (define lambda-code-gen
   (lambda (stack-fix body-label exit-label num-of-params body major code-gen)
@@ -2099,15 +2099,15 @@
      (>make-label body-label)
      (>push fp)
      (>mov fp sp)
-     
+
      (>comment (format "stack-fix:"))
      stack-fix ;; <------- stack fix for lambda-opt and lambda-var
      (>comment (format "end of stack-fix"))
-     
+
      (code-gen (+ 1 major) body)
-     
+
      (>pop fp)
-     
+
      (>ret)
      (>make-label exit-label)
      (>comment (format "end of lambda."))
@@ -2150,6 +2150,7 @@
                              (pattern-rule
                               `(fvar ,(? 'v))
                               (lambda (v)
+
                                 (let ((index (search-fvar-index-by-name fvars v)))
                                   (string-append (>comment (format "fvar ~s" v))
                                                  nl
@@ -2179,13 +2180,13 @@
                                                     (code-gen major test)
                                                     (>cmp r0 (>imm sob-false))
                                                     (>jeq else_label)
-                                                    
+
                                                     (code-gen major dit)
                                                     (>jmp exit_label)
-                                                    
+
                                                     (>make-label else_label)
                                                     (code-gen major dif)
-                                                    
+
                                                     ;; exit:
                                                     (>make-label exit_label)
                                                     ))))
@@ -2260,7 +2261,7 @@
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
                                                     (>drop "1")
-                                                    
+
                                                     (>pop R1)
                                                     (>drop R1)
                                                     ))))
@@ -2336,7 +2337,7 @@
                                                     ;; jump to the lambda's body label
                                                     (>jmp-a (>indd R0 "2"))
                                                     )))|#
-                           (lambda (func exprs)
+                              (lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
@@ -2347,7 +2348,7 @@
                                                     (>push num-of-args)
 
                                                     (code-gen major func)
-                                                    
+
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
                                                     (>drop "1")
@@ -2369,7 +2370,6 @@
                                                                                   args))
                                                  exit-label ":"))))
 
-                             ;; TODO: fix (fvar, bvar)
                            #|
                              `(fvar ,(? 'v))
                              `(pvar ,(? 'v) ,(? 'minor))
@@ -2387,36 +2387,43 @@
                                                      ))
                                     (fvar-body-gen (lambda (fvar-name)
                                                      (let ((fvar-offset (search-fvar-index-by-name fvars fvar-name)))
-                                                     (nl-string-append (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string fvar-offset)) r0)
-                                                                       )
-                                                     ))))
-                              (lambda (var val)
-                                (let ((var-type (car var)))
-                                  (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
-                                                 nl
-                                                 (code-gen major val)
-                                                 nl
-                                                 (cond ((equal? var-type 'pvar) (pvar-body-gen (caddr var)))
-                                                       ((equal? var-type 'bvar) (bvar-body-gen (caddr var) (cadddr var)))
-                                                       ((equal? var-type 'fvar) (fvar-body-gen (cadr var)))
-                                                       (else (error 'code-gen "(set) this shouldn't happen")))
-                                                 (>mov r0 (>imm sob-void))
-                                                 nl)))))
+                                                       (nl-string-append (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string fvar-offset)) r0)
+                                                                         )
+                                                       ))))
+                                (lambda (var val)
+                                  (let ((var-type (car var)))
+                                    (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
+                                                   nl
+                                                   (code-gen major val)
+                                                   nl
+                                                   (cond ((equal? var-type 'pvar) (pvar-body-gen (caddr var)))
+                                                         ((equal? var-type 'bvar) (bvar-body-gen (caddr var) (cadddr var)))
+                                                         ((equal? var-type 'fvar) (fvar-body-gen (cadr var)))
+                                                         (else (error 'code-gen "(set) this shouldn't happen")))
+                                                   (>mov r0 (>imm sob-void))
+                                                   nl)))))
 
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
                               (lambda (exprs)
                                 (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs))))
-                             
+
                              (pattern-rule
                               `(box ,(? 'var))
                               (lambda (var)
-                                (string-append (>comment (format "box ~s" var))
-                                               nl
-                                               (code-gen major var)
-                                               (>mov r1 r0)
-                                               (>mov-res r0 (>malloc "1"))
-                                               (>mov (>ind r0) r1))))
+                                (nl-string-append (>comment (format "box ~s" var))
+                                                  (code-gen major var)
+                                                  nl
+                                                  (>mov r1 r0)
+                                                  nl
+                                                  (>push r1)
+                                                  nl
+                                                  (>mov-res r0 (>malloc "1"))
+                                                  nl
+                                                  (>pop r1)
+                                                  nl
+                                                  (>mov (>ind r0) r1)
+                                                  nl)))
 
                              (pattern-rule
                               `(box-get ,(? 'var))
@@ -2805,7 +2812,7 @@
          (>mov (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR) R7) ;; R7 is loop-counter
          ;; exit label
          (>make-label exit-label)
-         
+
          )))))
 
 
@@ -2881,25 +2888,25 @@
 (define +-encoder
   (lambda ()
     (let ((num-of-args R2))
-    (>>scheme-function
-     
-     (>mov num-of-args (>fparg "1"))
-     (>mov R0 "0")
-     ;; for (...) { body }
-     (>for-loop "2"                          ; i = 2 
-                (base+displ num-of-args "2") ; i < num-of-args + 2
-                >inc                         ; i++
-                >jge                         ; (for i-- it would be >jle... you get it)
-                ;; loop body:
-                (>mov R1 (>fparg-nan loop-counter))
-                (>add r0 r1)
-                )
-     
-     (>push r0)
-     (>call "MAKE_SOB_INTEGER")
-     (>drop "1")
-     
-     ))))
+      (>>scheme-function
+
+       (>mov num-of-args (>fparg "1"))
+       (>mov R0 "0")
+       ;; for (...) { body }
+       (>for-loop "2"                          ; i = 2 
+                  (base+displ num-of-args "2") ; i < num-of-args + 2
+                  >inc                         ; i++
+                  >jge                         ; (for i-- it would be >jle... you get it)
+                  ;; loop body:
+                  (>mov R1 (>fparg-nan loop-counter))
+                  (>add r0 r1)
+                  )
+
+       (>push r0)
+       (>call "MAKE_SOB_INTEGER")
+       (>drop "1")
+
+       ))))
 
 (load "max-library-functions.scm")
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
@@ -2992,10 +2999,14 @@
                   (>nl (>mov (>indd base-addr (number->string (counter))) val)))))
         (string-append (>nl (>comment "encode-const-table"))
                        (string-append-list (map (lambda (const)
-                                                  (let ((sym-const-retrieve-actual-addr
-                                                         (lambda (c) (if (symbol? c)
-                                                                         (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
-                                                                         (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
+                                                  (let* ((classic-special-char? (lambda (c) (or (equal? c #\') (equal? c #\\))))
+                                                         (un-special-char (lambda (c) (cond ((classic-special-char? c) (list #\\ c))
+                                                                                            ((equal? c #\newline) (list #\\ #\n))
+                                                                                            (else (list c)))))
+                                                         (sym-const-retrieve-actual-addr
+                                                          (lambda (c) (if (symbol? c)
+                                                                          (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
+                                                                          (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
                                                     (cond ((equal? const (void)) (encode t_void))
 
                                                           ((null? const) (encode t_nil))
@@ -3003,7 +3014,7 @@
                                                           ((boolean? const) (nl-string-append (encode (>imm (number->string (if const 1 0))))
                                                                                               (encode t_bool)))
 
-                                                          ((char? const) (nl-string-append (encode (string-append "'" (list->string `(,const)) "'"))
+                                                          ((char? const) (nl-string-append (encode (string-append "'" (list->string (un-special-char const)) "'"))
                                                                                            (encode t_char)))
 
                                                           ((integer? const)
@@ -3023,23 +3034,24 @@
                                                           ((string? const)
                                                            (nl-string-append (string-append-list
                                                                               (map (lambda (char)
-                                                                                     (>nl (encode (list->string (list #\' char #\')))))
+                                                                                     (>nl (encode (list->string `(#\' ,@(un-special-char char) #\')))))
                                                                                    (string->list const)))
                                                                              (encode (>imm (number->string (string-length const))))
                                                                              (encode t_string)))
-                                                          
-                                                          ((vector? const) (nl-string-append (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
-                                                                                                  (vector->list const))
-                                                                                             (encode (vector-length const)) ;; TODO: number->string 
+
+                                                          ((vector? const) (nl-string-append (nl-string-append-list
+                                                                                              (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
+                                                                                                   (vector->list const)))
+                                                                                             (encode (number->string (vector-length const)))
                                                                                              (encode t_vector)))
-                                                          
+
                                                           ((rational? const) (nl-string-append (encode (>imm (number->string (denominator const))))
                                                                                                (encode (>imm (number->string (numerator const))))
                                                                                                (encode t_rational)))
 
                                                           ((procedure? const) "ERROR_WTF_SHOULDN'T_HAPPEN_2")
                                                           ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
-                                                          
+
                                                           (else (error 'encode-const-table (format "cant decide type of argument: ~s" const))))))
                                                 (vector->list table))))))))
 
@@ -3076,9 +3088,13 @@
   (let* ((^skip-label (label-generator "skip_print_"))
          (prologue "\n")
          (epilogue (lambda (skip-label) (nl-string-append
-                                         ;; "INFO"
-                                         ;; "SHOW(\"sp:\", SP);"
-                                         ;; "SHOW(\"result:\", R0);"
+                                         #|
+                                         "INFO"
+                                         "SHOW(\"sp:\", SP);"
+                                         "SHOW(\"result:\", R0);"
+                                         "HALT"
+                                         |#
+
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
                                          (>push r0)
@@ -3135,8 +3151,8 @@ return 0;
 (define compile-scheme-file
   (lambda (source dest)
     (let* ((code-text (file->string source))
-           (code-text (string-append scheme-written-lib-functions code-text)) 
-           
+           (code-text (string-append scheme-written-lib-functions code-text))
+
            (sexprs (string->sexpr code-text (lambda (w) (error 'string->sexpr (format "input is not a legal symbolic expression: ~s" w)))))
            (pes
             (map (lambda (sexpr)
@@ -3147,7 +3163,7 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
-           
+
            (tables (get-tables pes))
            (sym-tbl (car tables))
            (consts (list->vector (cadr tables)))
