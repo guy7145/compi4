@@ -50,3 +50,5 @@
 (make-string 7 #\o)
 (make-vector 7 '(a b c))
 (make-vector 9)
+(vector 1 2 3)
+(append '(1 2) 3)

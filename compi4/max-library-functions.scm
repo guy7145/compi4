@@ -498,6 +498,22 @@
 			))
 	))
 
+(define vector-encoder
+	(lambda()
+		(>>scheme-function
+			(>mov R2 (>fparg 1))
+			(>for-loop "2"
+					   (base+displ R2 "2")
+					   >inc
+					   >jge
+					   (>mov R1 (>fparg-nan loop-counter))
+					   (>push R1))
+			(>push R2)
+			(>call "MAKE_SOB_VECTOR")
+			(>pop R1)
+			(>drop R1)
+		)))
+
 (define max-library-functions-encoders
 	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
@@ -514,4 +530,5 @@
 	  (= . ,equals-encoder)
 	  (make-vector . ,make-vector-encoder)
 	  (make-string . ,make-string-encoder)
+	  (vector . ,vector-encoder)
 	))

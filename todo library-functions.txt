@@ -51,10 +51,11 @@ DONE: 	(still needs to be tested)
 	map
 	list (variadic)
 
+	make-string
+	make-vector
+	vector
+
 TODO:	scheme-	append (variadic)
 
 	cisc- 	apply (change to tail call)
 
-make-string
-make-vector
-vector
