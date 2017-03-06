@@ -2175,23 +2175,29 @@
                                 (let ((else_label (if3-else))
                                       (exit_label (if3-exit)))
                                   (nl-string-append (>comment (format "if3 ~s ~s ~s" test dit dif))
-                                                    ""
+                                                    ;; calculate test
                                                     (code-gen major test)
                                                     (>cmp r0 (>imm sob-false))
-                                                    (>jmp exit_label)
+                                                    (>jeq else_label)
+                                                    
                                                     (code-gen major dit)
                                                     (>jmp exit_label)
+                                                    
                                                     (>make-label else_label)
                                                     (code-gen major dif)
+                                                    
+                                                    ;; exit:
                                                     (>make-label exit_label)
                                                     ))))
 
                              (pattern-rule
                               `(def ,(? 'var-name) ,(? 'val))
-                              (lambda (var-name val)
-                                (let ((index (search-fvar-index-by-name fvars var-name)))
-                                  (nl-string-append (code-gen major val)
-                                                    (>comment  (format "(def ~s ~s)" var-name val))
+                              (lambda (fvar val)
+                                (let* ((var-name (cadr fvar))
+                                       (index (search-fvar-index-by-name fvars var-name)))
+                                  (nl-string-append (>comment  (format "(def ~s ~s)" var-name val))
+                                                    (code-gen major val)
+                                                    (>comment  (format "def assignment (name: ~s, index: ~s)" var-name index))
                                                     (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string index)) R0)
                                                     (>mov R0 sob-void)))))
 
@@ -3121,15 +3127,16 @@ return 0;
 "
 
 (define list (lambda x x))
-(define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
+(define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 
 ")
 
 (define compile-scheme-file
   (lambda (source dest)
     (let* ((code-text (file->string source))
-           (code-text (string-append scheme-written-lib-functions code-text))
+           (code-text (string-append scheme-written-lib-functions code-text)) 
+           
            (sexprs (string->sexpr code-text (lambda (w) (error 'string->sexpr (format "input is not a legal symbolic expression: ~s" w)))))
            (pes
             (map (lambda (sexpr)
@@ -3140,7 +3147,7 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
-
+           
            (tables (get-tables pes))
            (sym-tbl (car tables))
            (consts (list->vector (cadr tables)))
@@ -3151,7 +3158,6 @@ return 0;
            (fvars (list->vector (collect-defined-fvars pes)))
            ;; TODO: fvars-table-length might change when we add assembly library functions
            (fvars-table-length (number->string (vector-length fvars)))
-
 
 
            (generated-code (fold-left string-append "" (map (lambda (pe) (make-print (code-gen pe sym-tbl fvars indexed-const-table))) pes)))
