@@ -227,6 +227,10 @@
 (define >fparg-displ
   (lambda (x disp)
     (string-append "FPARG" (>paren (base+displ (number->string x) (number->string disp))))))
+(define >starg
+  (lambda (x)
+    (string-append "STARG" (>paren x))))
+
 
 (define >malloc
   (lambda (size)
@@ -253,7 +257,7 @@
   (lambda (start end ++ cond-jump . body)
     (let ((loop-head-label (LOOP-HEAD-LABEL))
           (loop-exit-label (LOOP-EXIT-LABEL))
-          (body (string-append-list body)))
+          (body (nl-string-append-list body)))
       (nl-string-append (>mov loop-counter start)
                         (>make-label loop-head-label)
                         (>cmp loop-counter end)

@@ -1990,20 +1990,67 @@
 ;; ________________________________________________________________ 
 
 (define stack-fix
+  (let ((^l-not-enough-space (label-generator "Stack_fix_L_Not_enough_space_"))
+        (^l-done-fixing (label-generator "Stack_fix_L_Done_fixing_")))
   (lambda (num-of-args)
-    (let ((accumulator R6)
+    (let ((l-not-enough-space (^l-not-enough-space))
+          (l-done-fixing (^l-done-fixing))
+          (accumulator R6)
           (actual-num-of-args R5)
           (list-stack-index (number->string (+ 2 num-of-args)))
+          (last-arg-index (number->string (- num-of-args 1)))
           (num-of-args (number->string num-of-args)))
       (nl-string-append
+       
+       ;; pack non-elementary arguments into a list (or sob_nil if there are none)
        (>mov actual-num-of-args (>fparg 1))
        (>mov accumulator sob-nil)
        (>for-loop actual-num-of-args
                   num-of-args
                   >dec
                   >jle
-                  (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1")))))
-       (>mov (>fparg-nan list-stack-index) accumulator)))))
+                  (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1"))))
+                  )
+       
+       ;; jmp to appropriate fix
+       (>cmp actual-num-of-args num-of-args)
+       (>jeq l-not-enough-space)
+       
+       
+       ;; some non-elementary arguments
+       (>drop (base+displ actual-num-of-args "4"))
+       (>push accumulator)
+       (>for-loop (base+displ num-of-args "-1")
+                  "0"
+                  >dec
+                  >jlt
+                  (>push (>>arg loop-counter)))
+       (>push (base+displ num-of-args "1"))
+       (>push (>fparg 0))  ;env
+       (>push (>fparg -1)) ; ret
+       (>push (>fparg -2)) ; fpold
+       (>mov fp sp) ;; fp <- sp
+       (>jmp l-done-fixing)
+       
+       
+       
+       ;; no non-elementary arguments
+       (>make-label l-not-enough-space)
+       (>inc sp)
+       (>mov fp sp)
+       (>for-loop "0"
+                  (base+displ actual-num-of-args "4")
+                  >inc
+                  >jge
+                  (>mov (>starg loop-counter) (>starg (base+displ loop-counter "1")))
+                  )
+       (>mov (>>arg actual-num-of-args) accumulator)
+       (>mov (>fparg 1) (base+displ num-of-args "1"))
+       
+       
+       ;; exit:
+       (>make-label l-done-fixing)
+       )))))
 
 (define lambda-code-gen
   (lambda (stack-fix body-label exit-label num-of-params body major code-gen)
@@ -2052,16 +2099,15 @@
      (>make-label body-label)
      (>push fp)
      (>mov fp sp)
-
-
+     
      (>comment (format "stack-fix:"))
      stack-fix ;; <------- stack fix for lambda-opt and lambda-var
      (>comment (format "end of stack-fix"))
-
-
+     
      (code-gen (+ 1 major) body)
-     (>mov sp fp)
+     
      (>pop fp)
+     
      (>ret)
      (>make-label exit-label)
      (>comment (format "end of lambda."))
@@ -2070,7 +2116,8 @@
 (define get-symbol-offset-in-table
   (lambda (sym-tbl sym)
     (* 2 (index-of sym-tbl sym))))
-;; TODO:
+
+
 (define code-gen
   (let ((if3-else (label-generator "if3_else_"))
         (if3-exit (label-generator "if3_exit_"))
@@ -2196,7 +2243,6 @@
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
-                                        ;(>push "0") ;; for var and opt support
                                                     (string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
@@ -2208,16 +2254,15 @@
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
                                                     (>drop "1")
-
+                                                    
                                                     (>pop R1)
                                                     (>drop R1)
-                                        ;(>drop "1") ;; for the (>push "0") earlier
                                                     ))))
 
                              ;; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
-                              (lambda (func exprs)
+                              #|(lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
@@ -2242,11 +2287,11 @@
                                                     ;;
                                                     (>push (>fparg-nan "-1"))
                                                     
-                                                    #|;; change fp to the old fp
-                                                    (>add sp "2") ; skip ret-addr and old-fp (without overriding it)
-                                                    (>pop R1)     ; pop old-fp into R1
-                                                    (>mov fp R1)  ; mov old-fp into fp
-                                                    |#
+;;                                                    ;; change fp to the old fp
+;;                                                    (>add sp "2") ; skip ret-addr and old-fp (without overriding it)
+;;                                                    (>pop R1)     ; pop old-fp into R1
+;;                                                    (>mov fp R1)  ; mov old-fp into fp
+;;                                                    
                                                     
                                                     ;; fix stack frame
                                                     (>mov R2 (>fparg-nan "-2"))
@@ -2266,24 +2311,46 @@
                                                                (>push (>fparg-nan loop-counter))
                                                                )
                                                     
-                                                    #|
-                                                    ; loop until R4 = SP
-                                                    
-                                                    (>mov r5 (>imm "-3"))
-                                                    (>make-label "fix_loop")
-                                                    (>cmp r5 r4)
-                                                    (>jlt "tc_app_end")
-                                                    (>push (>fparg-nan r5))
-                                                    (>dec r5)
-                                                    (>jmp "fix_loop")
-                                                    (>make-label "tc_app_end")
-                                                    |#
+;;                                                    
+;;                                                    ; loop until R4 = SP
+;;                                                    
+;;                                                    (>mov r5 (>imm "-3"))
+;;                                                    (>make-label "fix_loop")
+;;                                                    (>cmp r5 r4)
+;;                                                    (>jlt "tc_app_end")
+;;                                                    (>push (>fparg-nan r5))
+;;                                                    (>dec r5)
+;;                                                    (>jmp "fix_loop")
+;;                                                    (>make-label "tc_app_end")
+;;                                                    
                                                     
                                                     
                                                     (>mov fp R2)
                                                     ;"INFO"
                                                     ;; jump to the lambda's body label
                                                     (>jmp-a (>indd R0 "2"))
+                                                    )))|#
+                           (lambda (func exprs)
+                                (let ((num-of-args (number->string (length exprs)))
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
+                                                    (string-append-list
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
+                                                    (>push num-of-args)
+
+                                                    (code-gen major func)
+
+                                                    "INFO"
+                                                    "HALT"
+                                                    
+                                                    (>push (>indd R0 "1"))
+                                                    (>calla (>indd R0 "2"))
+                                                    (>drop "1")
+
+                                                    (>pop R1)
+                                                    (>drop R1)
                                                     ))))
 
                              (pattern-rule
@@ -3007,7 +3074,8 @@
          (prologue "\n")
          (epilogue (lambda (skip-label) (nl-string-append
                                          ;; "INFO"
-                                         ;; "SHOW(\"SP\", SP);"
+                                         ;; "SHOW(\"sp:\", SP);"
+                                         ;; "SHOW(\"result:\", R0);"
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
                                          (>push r0)
