@@ -1,14 +1,3 @@
-(define append
-    (lambda elements
-        (letrec ((append-helper (lambda (c e)
-                                  (if (null? c)
-                                      (if (null? e)
-                                      	  '()
-                                      	  (append-helper (car e) (cdr e)))
-                                      (if (pair? c)
-                                      	  (cons (car c) (append-helper (cdr c) e))
-                                      	  c)))))
-          (append-helper '() elements))))
 
 ;(define apply apply);;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <

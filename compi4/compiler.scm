@@ -2246,38 +2246,38 @@
 
                              (pattern-rule
                               `(applic ,(? 'func) ,(? 'exprs list?))
-                              (lambda (func exprs) 
+                              (lambda (func exprs)
                                 (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
                                       (num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
-                                                    ;"SHOW(\"before:\", SP);"
-                                                    ;"INFO"
-                                                    
+                                        ;"SHOW(\"before:\", SP);"
+                                        ;"INFO"
+
                                                     (string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
                                                           exprs))
                                                     (>push num-of-args)
                                                     (code-gen major func)
-                                                    
+
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
                                                     (>drop "1")
-                                                    
+
                                                     (>pop R1)
                                                     (>drop R1)
-                                                    
-                                                    
-                                                    ;"SHOW(\"after: \", SP);"
-                                                    ;"INFO"
-                                                    ;"SHOW(\"applic...:\", SP);"
+
+
+                                        ;"SHOW(\"after: \", SP);"
+                                        ;"INFO"
+                                        ;"SHOW(\"applic...:\", SP);"
                                                     ))))
 
                              ;; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
-                              (lambda (func exprs)
+                              #|(lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
@@ -2320,6 +2320,33 @@
                                                     
                                                     
                                                     (>jmp-a (>indd R0 "2"))
+                                                    ))))|#
+                              (lambda (func exprs)
+                                (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+                                      (num-of-args (number->string (length exprs)))
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
+                                        ;"SHOW(\"before:\", SP);"
+                                        ;"INFO"
+
+                                                    (string-append-list
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
+                                                    (>push num-of-args)
+                                                    (code-gen major func)
+
+                                                    (>push (>indd R0 "1"))
+                                                    (>calla (>indd R0 "2"))
+                                                    (>drop "1")
+
+                                                    (>pop R1)
+                                                    (>drop R1)
+
+
+                                        ;"SHOW(\"after: \", SP);"
+                                        ;"INFO"
+                                        ;"SHOW(\"applic...:\", SP);"
                                                     ))))
 
                              (pattern-rule
@@ -2433,21 +2460,21 @@
 
 ;; TODO: vectors, sort
 (define disassemble-const
-    (lambda (c)
-      (cond ((null? c) c)
-            ((pair? c) (let ((first (car c))
-                             (second (cdr c)))
-                         `(,@(disassemble-const second) ,@(disassemble-const first) ,c)))
-            
-            ((vector? c) `(,@(fold-left 
-                              (lambda (acc obj)
-                                (let ((dis-obj (disassemble-const obj)))
-                                  `(,@acc ,@dis-obj ,obj)))
-                              '()
-                              (vector->list c)) 
-                           ,c))
-                      
-                      
+  (lambda (c)
+    (cond ((null? c) c)
+          ((pair? c) (let ((first (car c))
+                           (second (cdr c)))
+                       `(,@(disassemble-const second) ,@(disassemble-const first) ,c)))
+
+          ((vector? c) `(,@(fold-left
+                            (lambda (acc obj)
+                              (let ((dis-obj (disassemble-const obj)))
+                                `(,@acc ,@dis-obj ,obj)))
+                            '()
+                            (vector->list c))
+                         ,c))
+
+
           (else `(,c)))))
 
 
@@ -2759,27 +2786,24 @@
               )))
 
 (define string->symbol-encoder
-  (let ((^exit-label (label-generator "string_to_symbol_exit_label_"))
-        (compare-symbol-and-string
-         (let ((^dit-label (label-generator "compare_symbol_and_string_cond_dit_"))
-               (^cond-exit-label (label-generator "compare_symbol_and_string_cond_exit_")))
-           (lambda (<dit> <dif>)
-             (let ((dit-label (^dit-label))
-                   (cond-exit-label (^cond-exit-label)))
-               (nl-string-append (>jeq dit-label)
-                                 <dif>
-                                 (>jmp cond-exit-label)
-                                 (>make-label dit-label)
-                                 <dit>
-                                 (>make-label cond-exit-label)
-                                 ))))))
+  (let* ((cond-exit-label "compare_symbol_and_string_cond_exit_")
+         (dit-label "compare_symbol_and_string_cond_dit_")
+         (compare-symbol-and-string
+          (lambda (<dit> <dif>)
+            (nl-string-append (>jeq dit-label)
+                              <dif>
+                              (>jmp cond-exit-label)
+                              (>make-label dit-label)
+                              <dit>
+                              (>make-label cond-exit-label)
+                              ))))
     (lambda ()
-      (let ((exit-label (^exit-label)))
+      (let ((exit-label "string_to_symbol_exit_label_"))
         (>>scheme-function                                  ;                | we need this
          (>mov R0 (>>arg "0"))                              ;                v
          (>for-loop (base+displ SYMBOL_TABLE_BASE_ADDR "1") ; [t_symbol | rep_str ]
                     (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
-                    >inc-twice
+                    (lambda (x) (>add x "2"))
                     >jge
                     (>cmp R0 (>indd SYMBOL_TABLE_BASE_ADDR loop-counter))
                     (compare-symbol-and-string
@@ -2794,12 +2818,15 @@
          (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) R0)
          (>dec loop-counter)
          (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) t_symbol)
+         
          ;; mov symbol to R0 
          (>mov R0 (>imm (base+displ SYMBOL_TABLE_BASE_ADDR loop-counter)))
+         
          ;; increment sym-tbl length counter
          (>mov R7 (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR))
          (>inc R7)
          (>mov (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR) R7) ;; R7 is loop-counter
+         
          ;; exit label
          (>make-label exit-label)
 
@@ -3090,8 +3117,8 @@
                                          (>call "WRITE_SOB")
                                          (>drop "1")
                                          (>call "NEWLINE")
-                                         
-                                         
+
+
                                          (>make-label skip-label)
                                          ))))
     (lambda (code)
@@ -3137,20 +3164,16 @@ return 0;
 (define number? (lambda (n) (or (integer? n) (rational? n))))
 (define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 (define append
-  (letrec ((bin-append
-            (lambda (x y)
-              (if (null? x)
-                  y
-                  (cons (car x) (append (cdr x) y)))))
-           (append-list
-            (lambda (acc s)
-              (if (null? s)
-                  (bin-append acc s)
-                  (append-list (bin-append acc (car s)) (cdr s))))))
-    (lambda x
-      (if (null? x)
-          x
-          (append-list (car x) (cdr x))))))
+    (lambda elements
+        (letrec ((append-helper (lambda (c e)
+                                  (if (null? c)
+                                      (if (null? e)
+                                      	  '()
+                                      	  (append-helper (car e) (cdr e)))
+                                      (if (pair? c)
+                                      	  (cons (car c) (append-helper (cdr c) e))
+                                      	  c)))))
+          (append-helper '() elements))))
 ")
 
 (define compile-scheme-file
