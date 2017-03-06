@@ -2745,12 +2745,14 @@
   (lambda () (>>scheme-function
               (>mov R0 (>>arg "0"))
               (>mov (>indd R0 "1") (>>arg "1"))
+              (>mov R0 sob-void)
               )))
 
 (define set-cdr!-encoder
   (lambda () (>>scheme-function
               (>mov R0 (>>arg "0"))
               (>mov (>indd R0 "2") (>>arg "1"))
+              (>mov R0 sob-void)
               )))
 
 (define string-length-encoder
@@ -3168,7 +3170,21 @@ return 0;
 (define list (lambda x x))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
 (define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
-
+(define append
+  (letrec ((bin-append
+            (lambda (x y)
+              (if (null? x)
+                  y
+                  (cons (car x) (append (cdr x) y)))))
+           (append-list
+            (lambda (acc s)
+              (if (null? s)
+                  (bin-append acc s)
+                  (append-list (bin-append acc (car s)) (cdr s))))))
+    (lambda x
+      (if (null? x)
+          x
+          (append-list (car x) (cdr x))))))
 ")
 
 (define compile-scheme-file
