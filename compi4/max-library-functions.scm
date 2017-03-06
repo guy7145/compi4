@@ -448,9 +448,11 @@
 			(>make-label end-label)
 			(>mov r1 (>>arg "0")) ; sob_int
 			(>mov r1 (>indd r1 "1"))
+			(>add r1 (>imm "2"))
 			
 			(>mov-res r0 (>malloc r1))
 			(>mov (>indd r0 "0") t_vector)
+			(>sub r1 (>imm "2"))
 			(>mov (>indd r0 "1") r1)
 			(>for-loop 
 				r1
@@ -484,9 +486,11 @@
 			(>make-label end-label)
 			(>mov r1 (>>arg "0")) ; sob_int
 			(>mov r1 (>indd r1 "1"))
+			(>add r1 (>imm "2"))
 			
 			(>mov-res r0 (>malloc r1))
 			(>mov (>indd r0 "0") t_string)
+			(>sub r1 (>imm "2"))
 			(>mov (>indd r0 "1") r1)
 			(>for-loop 
 				r1
