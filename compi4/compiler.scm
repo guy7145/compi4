@@ -2341,9 +2341,6 @@
                                                     (>push num-of-args)
 
                                                     (code-gen major func)
-
-                                                    "INFO"
-                                                    "HALT"
                                                     
                                                     (>push (>indd R0 "1"))
                                                     (>calla (>indd R0 "2"))
