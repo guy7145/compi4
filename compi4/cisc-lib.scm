@@ -215,6 +215,10 @@
   (lambda (base displacement)
     (string-append base " + " displacement)))
 
+(define base-displ
+  (lambda (base displacement)
+    (string-append base " - " displacement)))
+
 (define >define
   (lambda (name value)
     (string-append "#define " name " " value)))
