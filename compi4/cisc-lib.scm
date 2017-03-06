@@ -64,7 +64,9 @@
 (define r15 R15)
 
 (define fp "FP")
+(define FP fp)
 (define sp "SP")
+(define SP sp)
 
 ;; constants
 ;; 
@@ -236,6 +238,9 @@
 (define >starg
   (lambda (x)
     (string-append "STARG" (>paren x))))
+(define >stack
+  (lambda (x)
+    (string-append "STACK" (>paren x))))
 
 
 (define >malloc
