@@ -116,6 +116,8 @@
         (l-move-frame-to-base-loop "l_apply_move_frame_to_base_loop")
         (l-finished-moving-frame-to-base "l_apply_finished_moving_frame_to_base")
         ;; variables for flipping the list elements in the stack
+        (l-flip-list-in-stack-head "l_apply_flip_list_in_stack_head")
+        (l-finished-flipping-list-in-stack "l_apply_finished_finished_flipping_list_in_stack")
         (length-i r4)
         (length/2 r3)
         (tmp r2))
@@ -153,12 +155,9 @@
                         (>mov car (>indd lst car-offset))
                         (>mov lst (>indd lst cdr-offset))
                         (>push car)
-                        ;"SHOW(\"car:\", R9);"
                         (>jmp l-push-list-elements-loop)
                         (>make-label l-finished-pushing-list-elements)
                         
-                        
-                        ;"INFO"
                         
                         ;; flip list elements in stack
                         ;;
@@ -170,9 +169,9 @@
                         
                         (>add sp "1") ; for the >starg macro
                         
-                        (>make-label "head")
+                        (>make-label l-flip-list-in-stack-head)
                         (>cmp my-loop-counter length/2)
-                        (>jge "exit")
+                        (>jge l-finished-flipping-list-in-stack)
                         
                         (>mov length-i length)
                         (>sub length-i my-loop-counter)
@@ -182,14 +181,12 @@
                         (>mov (>starg my-loop-counter) (>starg length-i))
                         (>mov (>starg length-i) tmp)
                         (>inc my-loop-counter)
-                        (>jmp "head")
+                        (>jmp l-flip-list-in-stack-head)
                         
-                        (>make-label "exit")
+                        (>make-label l-finished-flipping-list-in-stack)
                         
                         (>sub sp "1")
                         
-                        ;"INFO"
-                        ;"SHOW(\"flipped:\", R9);"
                         
                         ;; re-push rest of the arguments atop the list elements
                         ;;

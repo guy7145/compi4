@@ -2794,63 +2794,123 @@
               )))
 
 (define string->symbol-encoder
-  (let* ((cond-exit-label "compare_symbol_and_string_cond_exit_")
-         (dit-label "compare_symbol_and_string_cond_dit_")
-         (compare-symbol-and-string
-          (lambda (<dit> <dif>)
-            (nl-string-append (>jeq dit-label)
-                              <dif>
-                              (>jmp cond-exit-label)
-                              (>make-label dit-label)
-                              <dit>
-                              (>make-label cond-exit-label)
-                              ))))
+  (let* ((str r1)
+         (str-length r2)
+         (i r3) ; i is the actual address and not an index!
+         (j r4)
+         (N r5) ; N is also an actual address and not just a limit 
+         (tbl-length-ptr SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
+         (tbl-length r6)
+         (l-search-loop-head "string_to_symbol_search_loop_head")
+         (l-found-one "string_to_symbol_found_one")
+         (l-not-found "string_to_symbol_not_found")
+         
+         ;; compare loop
+         (l-equal "string_to_symbol_compare_equal")
+         (l-not-equal "string_to_symbol_compare_not_equal")
+         (l-compare-loop-head "string_to_symbol_compare_loop_head")
+         (symbol-str r7)
+         
+         (l-exit "string_to_symbol_exit")
+         )
+         
     (lambda ()
       (let ((exit-label "string_to_symbol_exit_label_"))
-        (>>scheme-function                                  ;                | we need this
-         (>mov R0 (>>arg "0"))                              ;                v
-         (>for-loop (base+displ SYMBOL_TABLE_BASE_ADDR "1") ; [t_symbol | rep_str ]
-                    (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
-                    (lambda (x) (>add x "2"))
-                    >jge
-
-                    (>mov R5 (>indd SYMBOL_TABLE_BASE_ADDR loop-counter))
-                    (>cmp R6 (>indd R5 "1"))
-                    (>jgt "min_length_is_set")
-                    (>mov R6 (>indd R0 "1"))
-                    (>make-label "min_length_is_set")
-
-                    (>for-loop-inner "2"
-                                     (base+displ R6 "2")
-                                     >inc
-                                     >jgt
-                                     (>cmp (>indd R5 loop-counter-inner) (>indd R0 loop-counter-inner))
-                                     (>jne "string_are_not_matching"))
-
-
-                    (>dec loop-counter)
-                    (>mov R0 (>imm (base+displ loop-counter SYMBOL_TABLE_BASE_ADDR)))
-                    (>jmp exit-label)
-
-                    (>make-label "string_are_not_matching")
-                    )
-
-         ;; encode new symbol into the symbol table
-         (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) R0)
-         (>dec loop-counter)
-         (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) t_symbol)
+        (>>scheme-function
          
-         ;; mov symbol to R0 
-         (>mov R0 (>imm (base+displ SYMBOL_TABLE_BASE_ADDR loop-counter)))
+         ;; assign local variables
+         ;;
+         (>mov str (>>arg "0"))
+         (>mov str-length (>indd str "1"))
+         (>mov tbl-length (>ind tbl-length-ptr))
+         (>mov i (>imm SYMBOL_TABLE_BASE_ADDR))
+         (>add i "1")
+         (>mov N (>imm SYMBOL_TABLE_BASE_ADDR))
+         (>add N tbl-length)
+         #|
+         "SHOW(\"str\", R1);"
+         "SHOW(\"str length\", R2);"
+         |#
+         ;; search for matching symbol int the table
+         ;; main loop
+         (>make-label l-search-loop-head)
+         (>cmp i N)
+         (>jge l-not-found)
          
-         ;; increment sym-tbl length counter
-         (>mov R7 (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR))
-         (>inc R7)
-         (>mov (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR) R7) ;; R7 is loop-counter
+         #|
+         "SHOW(\"i:\", R3);"
+         "SHOW(\"i->:\", IND(R3));"
+         "SHOW(\"N:\", R5);"
+         |#
+         ;; compare string and current symbol's str representation
+         ;;
+         ;; retrieve symbol's str representation
+         (>mov symbol-str i)
+         (>mov symbol-str (>ind symbol-str))
          
-         ;; exit label
-         (>make-label exit-label)
-
+         ;; compare length
+         #|
+         "SHOW(\"symbol-str:\", R7)"
+         "SHOW(\"symbol-str length:\", INDD(R7, 1))"
+         |#
+         (>cmp str-length (>indd symbol-str "1"))
+         (>jne l-not-equal)
+         
+         ;; 
+         (>mov j "2") ; first char
+         
+         ;; loop head
+         (>make-label l-compare-loop-head)
+         
+         #|
+         "SHOW(\"j\", R4)"
+         |#
+         
+         (>cmp j (string-append str-length "+2"))
+         (>jeq l-equal) ; all characters are equal between the strings
+         
+         (>cmp (>indd str j) (>indd symbol-str j)) ; compare current characters
+         (>jne l-not-equal)
+         (>add j "1")
+         (>jmp l-compare-loop-head)
+         (>make-label l-not-equal)
+         ;; end of compare loop
+         
+         
+         (>add i "2")
+         (>jmp l-search-loop-head)
+         ;; end of search loop
+         
+         
+         
+         
+         ;; found a matching symbol!
+         ;; -->  assign address to R0
+         ;;
+         (>make-label l-equal)
+         (>make-label l-found-one)
+         (>sub i "1")
+         (>mov R0 i)
+         (>jmp l-exit)
+         
+         
+         ;; no matching symbol
+         ;; --> create one and assign it to R0
+         ;; --> increment the tbl-length of the symbol table
+         ;;
+         (>make-label l-not-found)
+         ;"SHOW(\"not found\", R1)"
+         (>add tbl-length "1")              ; increment tbl-length
+         (>mov (>ind tbl-length-ptr) tbl-length) ; update variable
+         
+         (>mov (>ind i) str)      ; 
+         (>sub i "1")
+         (>mov (>ind i) t_symbol) ; 
+         (>mov R0 i)
+         (>jmp l-exit)
+         
+         
+         (>make-label l-exit)
          )))))
 
 

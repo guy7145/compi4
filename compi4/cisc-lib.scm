@@ -57,7 +57,7 @@
 (define FVARS_TABLE_BASE_ADDR "fvars_addr")
 (define SYMBOL_TABLE_BASE_ADDR "sym_tbl_addr")
 (define SYMBOL_TABLE_LENGTH_COUNTER_ADDR "sym_tbl_length")
-(define SYMBOL_TABLE_LENGTH_COUNTER_ACTUAL_ADDR "0")
+(define SYMBOL_TABLE_LENGTH_COUNTER_ACTUAL_ADDR (string-append CONST_TABLE_BASE_ADDR "-1"))
 
 (define sob-false "SOB_FALSE")
 (define sob-true "SOB_TRUE")
