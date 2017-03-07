@@ -123,6 +123,7 @@
     '(letrec ((x 1)) b)
     '(letrec ((x 1) (y 2)) b1 b2)
     '(letrec ((x 1) (y 2) (a 5)) b1 b2 (or 1 2 3) (if 1 2 3) #t)
+    '(let* ((v (make-vector 3)) (vs! (lambda (i x) (vector-set! v i x)))) (vs! 0 'a) (vs! 1 234) (vs! 2 #\P))
 ))
 
 (define constantTests

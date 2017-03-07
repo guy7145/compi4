@@ -2827,21 +2827,12 @@
          (>add i "1")
          (>mov N (>imm SYMBOL_TABLE_BASE_ADDR))
          (>add N tbl-length)
-         #|
-         "SHOW(\"str\", R1);"
-         "SHOW(\"str length\", R2);"
-         |#
          ;; search for matching symbol int the table
          ;; main loop
          (>make-label l-search-loop-head)
          (>cmp i N)
          (>jge l-not-found)
          
-         #|
-         "SHOW(\"i:\", R3);"
-         "SHOW(\"i->:\", IND(R3));"
-         "SHOW(\"N:\", R5);"
-         |#
          ;; compare string and current symbol's str representation
          ;;
          ;; retrieve symbol's str representation
@@ -2849,10 +2840,6 @@
          (>mov symbol-str (>ind symbol-str))
          
          ;; compare length
-         #|
-         "SHOW(\"symbol-str:\", R7)"
-         "SHOW(\"symbol-str length:\", INDD(R7, 1))"
-         |#
          (>cmp str-length (>indd symbol-str "1"))
          (>jne l-not-equal)
          
@@ -2861,10 +2848,6 @@
          
          ;; loop head
          (>make-label l-compare-loop-head)
-         
-         #|
-         "SHOW(\"j\", R4)"
-         |#
          
          (>cmp j (string-append str-length "+2"))
          (>jeq l-equal) ; all characters are equal between the strings

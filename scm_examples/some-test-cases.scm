@@ -26,3 +26,33 @@ a
 
 #\x
 #\X
+
+(let* ((v (make-vector 3))
+       (vs! (lambda (i x) (vector-set! v i x))))
+  vs!)
+
+(let* ((v (make-vector 3))
+       (vs! (lambda (i x) v)))
+  (vs! 0 'a)
+  (vs! 1 234)
+  (vs! 2 #\P))
+
+(let* ((v (make-vector 3))
+       (vs! (lambda (i x) vector-set!)))
+  (vs! 0 'a)
+  (vs! 1 234)
+  (vs! 2 #\P))
+
+(let* ((v (make-vector 3))
+       (vs! (lambda (i x) (list v i x))))
+  (vs! 0 'a)
+  (vs! 1 234)
+  (vs! 2 #\P))
+
+(vector-set! '#(0 0 0) 0 2)
+
+(let* ((v (make-vector 3))
+       (vs! (lambda (i x) (vector-set! v i x))))
+  (vs! 0 'a)
+  (vs! 1 234)
+  (vs! 2 #\P))
