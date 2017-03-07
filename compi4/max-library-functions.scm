@@ -262,7 +262,6 @@
      (>mov R0 (>imm "0"))
      (>mov R2 (>fparg 1))
      (>mov R3 (>imm "1"))
-     (>jmp "op_add_end")
      (>for-loop "2"
                 (base+displ R2 "2")
                 >inc
