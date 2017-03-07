@@ -2013,7 +2013,6 @@
                     )
 
          ;; jmp to appropriate fix
-         "SHOW(\"HI\", R6)"
          (>cmp actual-num-of-args num-of-args)
          (>jle l-not-enough-space)
 

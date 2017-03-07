@@ -1,13 +1,9 @@
 (load "tdd-tools.scm")
-(load "compiler.scm")
-
-; "rationals" "numbers-and-booleans" "if-test" 
-; "or-tests" "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "lib-functions" "append" "tc-applic" "some-test-cases" 
-; "a22" "test06" "torture-test-for-compiler-02"
+(load "compiler.scm") 
 
 (define compile-and-make-comparison-script
   (let ((compare-script-file "automated-compare-tests.scm")
-        (filenames (list "lambda-opt-var-stack-fix" )) ; "cse-example" "lambda-var" "lambda-opt" "max-lib-tests" "simple-example" "lambda-simple-and-applic"
+        (filenames (list "or-tests" "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "lib-functions" "append" "tc-applic" "some-test-cases" "rationals" "numbers-and-booleans" "if-test" "lambda-opt-var-stack-fix" "a22" "test06" "torture-test-for-compiler-02" )) ; "cse-example" "lambda-var" "lambda-opt" "max-lib-tests" "simple-example" "lambda-simple-and-applic"
         (prologue "
 (load \"tdd-tools.scm\")
 ")
