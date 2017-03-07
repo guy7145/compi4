@@ -20,9 +20,9 @@ a
 
 
 
-(apply list 1)
-(apply list 1 2)
-(apply list 1 2 3)
+(apply list 1 '())
+(apply list 1 2 '(2))
+(apply list 1 2 3 '(3))
 
 #\x
 #\X

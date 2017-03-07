@@ -52,7 +52,7 @@
 
 ;; constants
 ;; 
-(define CONST_TABLE_ACTUAL_ADDRESS "Mega(400)")
+(define CONST_TABLE_ACTUAL_ADDRESS "Mega(100)")
 (define CONST_TABLE_BASE_ADDR "consts_addr")
 (define FVARS_TABLE_BASE_ADDR "fvars_addr")
 (define SYMBOL_TABLE_BASE_ADDR "sym_tbl_addr")

@@ -96,22 +96,142 @@
      )))
 
 (define apply-encoder
-  (lambda()
-    (nl-string-append (>pop r11) ; ret
-                      (>drop (>imm "1")) ; apply's env
-                      (>pop r12) ; n (num-of-args)
-                      (>pop r13) ; f
+  (let ((ret r11)
+        (env-f r12) ; f's enviroment
+        (n r13) ; number of arguments
+        (f r14) ; f's obj
+        (body-label-f r14) ; f's body label
+        (lst r10)
+        (car r9)
+        (cdr r8)
+        (car-offset "1")
+        (cdr-offset "2")
+        (length r15)
+        (sp-backup r6)
+        (my-loop-counter r5)
+        (l-push-list-elements-loop "l_apply_push_list_elements_loop")
+        (l-finished-pushing-list-elements "l_apply_finished_pushing_list_elements")
+        (l-stacking-arguments-loop "l_apply_stacking_arguments_loop")
+        (l-finished-stacking-arguments "l_apply_finished_stacking_arguments")
+        (l-move-frame-to-base-loop "l_apply_move_frame_to_base_loop")
+        (l-finished-moving-frame-to-base "l_apply_finished_moving_frame_to_base"))
+    
+    (lambda()
+      (nl-string-append ;"INFO"
+                        (>mov fp sp) ; we will use macro (>>arg ...) as if f argument doesn't exist and (>>arg "0") [fparg(2)] is the first not-f non-list argument
 
-                      (>dec r12) ; n-1
-                      (>mov r14 (>indd r13 "1")) ; f's env
+                        (>pop ret)  ; ret
+                        (>drop "1") ; apply's env
+                        (>pop n)    ; n (num of args)
+                        (>pop f)    ; func
 
-                      (>push r12)
-                      (>push r14)
-                      (>push r11)
+                        
+                        
+                        (>mov env-f (>indd f "1"))
+                        (>mov body-label-f (>indd f "2"))
 
-                      (>jmp-a (>indd r13 "2")) ; f's body
-                      )
-    ))
+                        (>mov sp-backup sp)
+                        (>sub n "2") ; sub f and lst; n <-- n-2
+                        (>sub sp n); point at lst
+                        (>pop lst)
+
+
+                        (>add sp "1") ; so we won't overwrite arguments while 
+                        (>add sp n)   ; retrieving list's elements 
+
+                        ;; push list elements abovethe rest of the arguments
+                        (>mov length "0")
+                        ;"INFO"
+                        (>make-label l-push-list-elements-loop)
+                        (>cmp (>ind lst) t_pair) ; (improper lists?)
+                        (>jne l-finished-pushing-list-elements)
+                        
+                        (>inc length)
+                        (>mov car (>indd lst car-offset))
+                        (>mov lst (>indd lst cdr-offset))
+                        (>push car)
+                        ;(format "SHOW(\"car:\", INDD(R9, 1));")
+                        (>jmp l-push-list-elements-loop)
+                        
+                        ;(format "SHOW(\"length:\", R15);")
+
+                        (>make-label l-finished-pushing-list-elements)
+
+                        ;; push rest of the arguments atop the list elements 
+                        (>mov my-loop-counter n)
+                        
+                        ;(format "SHOW(\"alive 1:\", R13);")
+                        
+                        (>make-label l-stacking-arguments-loop)
+                        (>cmp my-loop-counter "0")
+                        (>jeq l-finished-stacking-arguments)
+                        (>dec my-loop-counter)
+                        (>push (>>arg my-loop-counter))
+                        (>jmp l-stacking-arguments-loop)
+                        (>make-label l-finished-stacking-arguments)
+                        
+                        ;(format "SHOW(\"alive 2:\", SP);")
+                        
+                        ;; move sp-backup to the start of the frame:
+                        ;(format "SHOW(\"sp-backup:\", R6);")
+                        (>sub sp-backup n)
+                        (>sub sp-backup "1")
+                        ;(format "SHOW(\"sp-backup again:\", R6);")
+                        ;"INFO"
+                        ;;
+                        ;;
+                        (>add sp-backup n)
+                        (>add sp-backup length)
+                        (>mov fp sp-backup)
+                        (>add fp "4")
+                        
+                        ;(format "SHOW(\"sp-backup last almost:\", R6);")
+                        
+                        ;; move all arguments to the base of the frame (both normal arguments and list elements)
+                        (>mov my-loop-counter n)
+                        (>add my-loop-counter length)
+                        
+                        ;(format "SHOW(\"moving frame down args, n:\", R13);")
+                        ; "INFO"
+                        
+                        (>make-label l-move-frame-to-base-loop)
+                        (>cmp my-loop-counter "0")
+                        (>jeq l-finished-moving-frame-to-base)
+                        (>dec my-loop-counter)
+                        (>mov (>>arg my-loop-counter) (>starg my-loop-counter))
+                        (>jmp l-move-frame-to-base-loop)
+                        (>make-label l-finished-moving-frame-to-base)
+                        
+                        ;(format "SHOW(\"alive:\", R5);")
+                        ;"INFO"
+                        
+                        ;(format "SHOW(\"finished -replacing args, n:\", R13);")
+                        
+                        ;; recalculate n (add number of list elements)
+                        (>add n length)
+                        
+                        (>mov sp sp-backup)
+                        
+                        ;; push ret, env and n
+                        (>push n)
+                        (>push env-f)
+                        (>push ret)
+                        
+                        (>jmp-a body-label-f)
+                        )
+      )))
+
+
+
+
+
+
+
+
+
+
+
+
 
 (define add-encoder
   (lambda()
