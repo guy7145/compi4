@@ -2145,7 +2145,8 @@
                                     (let ((index (get-const-offset indexed-consts const)))
                                       (string-append (>comment (format "const ~s" const))
                                                      nl
-                                                     (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index)))))))))
+                                                     (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index))))
+                                                     )))))
 
                              (pattern-rule
                               `(fvar ,(? 'v))
@@ -2251,9 +2252,7 @@
                                       (num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
-                                        ;"SHOW(\"before:\", SP);"
-                                        ;"INFO"
-
+                                                    
                                                     (string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
@@ -2267,17 +2266,11 @@
 
                                                     (>pop R1)
                                                     (>drop R1)
-
-
-                                        ;"SHOW(\"after: \", SP);"
-                                        ;"INFO"
-                                        ;"SHOW(\"applic...:\", SP);"
                                                     ))))
 
-                             ;; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
-                              #|(lambda (func exprs)
+                              (lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
@@ -2315,38 +2308,9 @@
                                                     
                                                     ;; restore old fp
                                                     (>mov fp r2)
-                                                    
-                                                    
-                                                    
+                                                    ;"INFO"
                                                     
                                                     (>jmp-a (>indd R0 "2"))
-                                                    ))))|#
-                              (lambda (func exprs)
-                                (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
-                                      (num-of-args (number->string (length exprs)))
-                                      (exprs (reverse exprs)))
-                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
-                                        ;"SHOW(\"before:\", SP);"
-                                        ;"INFO"
-
-                                                    (string-append-list
-                                                     (map (lambda (e) (nl-string-append (code-gen major e)
-                                                                                        (>push R0)))
-                                                          exprs))
-                                                    (>push num-of-args)
-                                                    (code-gen major func)
-
-                                                    (>push (>indd R0 "1"))
-                                                    (>calla (>indd R0 "2"))
-                                                    (>drop "1")
-
-                                                    (>pop R1)
-                                                    (>drop R1)
-
-
-                                        ;"SHOW(\"after: \", SP);"
-                                        ;"INFO"
-                                        ;"SHOW(\"applic...:\", SP);"
                                                     ))))
 
                              (pattern-rule
@@ -2458,7 +2422,6 @@
      <initial-fvar-tbl>
      code)))
 
-;; TODO: vectors, sort
 (define disassemble-const
   (lambda (c)
     (cond ((null? c) c)
@@ -2880,7 +2843,6 @@
               (>mov R0 sob-void)
               )))
 
-
 (define zero?-encoder
   (lambda ()
     (let ((label-eq "LIB_ZERO_EQUAL")
@@ -2889,7 +2851,7 @@
 
        (>mov R0 (>>arg "0"))
        (>mov R0 (>indd R0 "1"))
-
+       
        (>cmp R0 (>imm "0"))
        (>jeq label-eq)
 
