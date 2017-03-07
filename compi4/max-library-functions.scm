@@ -100,15 +100,15 @@
 		(>>scheme-function
 			(>push FP)
 			(>mov FP SP)
-			(>mov R1 (>imm "0"))
-			(>mov R2 (>fparg 3))
+			(>mov R1 (>imm "0"))   ; counter of args
+			(>mov R2 (>stack "0")) ; list of args
 
 			(>make-label "apply_loop")
-			(>cmp R2 (>ind sob-nil))
+			(>cmp R2 sob-nil)			; while list != null
 			(>jeq "apply_loop_end")
-			(>push (>indd R2 "1"))
-			(>mov R2 (>indd R2 "2"))
-			(>inc R1)
+			(>push (>indd R2 "1"))		; push car
+			(>mov R2 (>indd R2 "2"))	; list = (cdr list)
+			(>inc R1)					; counter++
 			(>jmp "apply_loop")
 
 			(>make-label "apply_loop_end")
@@ -119,7 +119,7 @@
 
 			(>make-label "apply_loop2")
 			(>cmp R2 R3)
-			(>jeq "apply_loop2_end")
+			(>jne "apply_loop2_end")
 			(>mov R4 SP)
 			(>add R4 R2)
 			(>mov R4 (>stack R4))
@@ -135,8 +135,8 @@
 			(>make-label "apply_loop2_end")
 			(>add sp R1)
 			(>push R1)
-			(>push (>indd (>fparg 2) "1"))
-			(>calla (>indd (>fparg 2) "2"))
+			(>push (>indd (>stack "1") "1"))
+			(>calla (>indd (>stack "1") "2"))
 			(>drop "1")
 			(>pop R1)
 			(>drop R1)
@@ -149,6 +149,7 @@
 			(>mov R0 (>imm "0"))
 			(>mov R2 (>fparg 1))
 			(>mov R3 (>imm "1"))
+			(>jmp "op_add_end")
 			(>for-loop "2"
 					   (base+displ R2 "2")
 					   >inc
