@@ -2001,7 +2001,7 @@
             (last-arg-index (number->string (- num-of-args 1)))
             (num-of-args (number->string num-of-args)))
         (nl-string-append
-
+         
          ;; pack non-elementary arguments into a list (or sob_nil if there are none)
          (>mov actual-num-of-args (>fparg 1))
          (>mov accumulator sob-nil)
@@ -2013,41 +2013,40 @@
                     )
 
          ;; jmp to appropriate fix
+         "SHOW(\"HI\", R6)"
          (>cmp actual-num-of-args num-of-args)
-         (>jeq l-not-enough-space)
+         (>jle l-not-enough-space)
 
 
          ;; some non-elementary arguments
          (>drop (base+displ actual-num-of-args "4"))
          (>push accumulator)
-         (>for-loop (base+displ num-of-args "-1")
+         (>for-loop (>imm (base+displ num-of-args "-1"))
                     "0"
                     >dec
                     >jlt
                     (>push (>>arg loop-counter)))
-         (>push (base+displ num-of-args "1"))
+         (>push (>imm (base+displ num-of-args "1")))
          (>push (>fparg 0))  ;env
          (>push (>fparg -1)) ; ret
          (>push (>fparg -2)) ; fpold
          (>mov fp sp) ;; fp <- sp
          (>jmp l-done-fixing)
 
-
-
+         
          ;; no non-elementary arguments
          (>make-label l-not-enough-space)
          (>inc sp)
          (>mov fp sp)
          (>for-loop "0"
-                    (base+displ actual-num-of-args "4")
+                    (>imm (base+displ actual-num-of-args "4"))
                     >inc
                     >jge
                     (>mov (>starg loop-counter) (>starg (base+displ loop-counter "1")))
                     )
          (>mov (>>arg actual-num-of-args) accumulator)
-         (>mov (>fparg 1) (base+displ num-of-args "1"))
-
-
+         (>mov (>fparg 1) (>imm (base+displ num-of-args "1")))
+         
          ;; exit:
          (>make-label l-done-fixing)
          )))))
@@ -3147,7 +3146,8 @@
 ;;
 (define prologue "
 /* change to 0 for no debug info to be printed: */
-#define DO_SHOW 0
+#define DO_SHOW 1
+#include \"arch/debug_macros.h.c\"
 
 #include <stdio.h>
 #include <stdlib.h>

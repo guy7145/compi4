@@ -1,27 +1,17 @@
 (load "tdd-tools.scm")
 (load "compiler.scm")
 
+; "rationals" "numbers-and-booleans" "if-test" 
+; "or-tests" "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "lib-functions" "append" "tc-applic" "some-test-cases" 
+; "a22" "test06" "torture-test-for-compiler-02"
+
 (define compile-and-make-comparison-script
   (let ((compare-script-file "automated-compare-tests.scm")
-        (filenames (list "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "lib-functions" "append" "tc-applic" "some-test-cases" "a22" "test06" )) ; "cse-example" "lambda-var" "lambda-opt" "lambda-opt-var-stack-fix" "rationals" "numbers-and-booleans" "if-test" "or-tests" "max-lib-tests" "simple-example" "lambda-simple-and-applic"
+        (filenames (list "lambda-opt-var-stack-fix" )) ; "cse-example" "lambda-var" "lambda-opt" "max-lib-tests" "simple-example" "lambda-simple-and-applic"
         (prologue "
 (load \"tdd-tools.scm\")
-#|
-(define odisplay display)
-(define display	(lambda (x) 
-		(if 	(pair? x) 
-			(begin 	(display #\\( ) 
-				(display (car x)) 
-				(display #\\.) 
-				(display (cdr x)) 
-				(display #\\) )
-			)
-			(odisplay x)
-		)
-(display-colored-BIG 'Automated-compare-tests:)
-))
-|#
 ")
+(display-colored-BIG 'Automated-compare-tests:)
         (epilogue "
 (LightCyan)(display-normal 'done.)(NC)
 ")

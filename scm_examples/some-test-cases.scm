@@ -1,10 +1,10 @@
 ; test 105
-;(define a (make-string 1))
-;(string-set! a 0
-;             (integer->char 80))
-;a
+(define a (make-string 1))
+(string-set! a 0
+             (integer->char 80))
+a
 
-;(integer->char 80)
+(integer->char 80)
 
 ;;; torture-test-for-compiler-01.scm
 ;;; Tests the tail-call optimization. Assumes zeor?, - and #t
@@ -20,4 +20,9 @@
 
 
 
+(apply list 1)
+(apply list 1 2)
+(apply list 1 2 3)
 
+#\x
+#\X
