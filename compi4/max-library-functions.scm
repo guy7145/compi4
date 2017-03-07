@@ -98,23 +98,49 @@
 (define apply-encoder
 	(lambda() 
 		(>>scheme-function
-			(>mov R0 (>>arg "0"))			; func
-			(>mov R1 (>>arg "1"))			; args list
-			(>mov R2 (>imm "0"))			; args counter
-			(>make-label "APPLY_LOOP_START")
-			(>cmp R1 sob-nil)				; while list != null
-			(>jeq "APPLY_LOOP_END")
-			(>push (>indd R1 "1"))			; push car
-			(>add R2 "1")					; counter++
-			(>mov R1 (>indd R1 "2"))		; list++
-			(>jmp "APPLY_LOOP_START")
-			(>make-label "APPLY_LOOP_END")
-			(>push R2)						; push counter
-			(>push (>indd R1 "1"))			; push env
-			(>calla (>indd R0 "2"))			; call func
-			(>pop R1) 						; env
-			(>pop R1) 						; counter
+			(>push FP)
+			(>mov FP SP)
+			(>mov R1 (>imm "0"))   ; counter of args
+			(>mov R2 (>stack "0")) ; list of args
+
+			(>make-label "apply_loop")
+			(>cmp R2 sob-nil)			; while list != null
+			(>jeq "apply_loop_end")
+			(>push (>indd R2 "1"))		; push car
+			(>mov R2 (>indd R2 "2"))	; list = (cdr list)
+			(>inc R1)					; counter++
+			(>jmp "apply_loop")
+
+			(>make-label "apply_loop_end")
+			(>sub SP R1)
+			(>mov R2 (>imm "0"))
+			(>mov R3 R1)
+			(>div R3 (>imm "2"))
+
+			(>make-label "apply_loop2")
+			(>cmp R2 R3)
+			(>jne "apply_loop2_end")
+			(>mov R4 SP)
+			(>add R4 R2)
+			(>mov R4 (>stack R4))
+			(>mov R5 R1)
+			(>dec R5)
+			(>sub R5 R2)
+			(>add R5 SP)
+			(>mov (>stack (base+displ R2 SP)) (>stack R5))
+			(>mov (>stack R5) R4)
+			(>inc R2)
+			(>jmp "apply_loop2") 
+
+			(>make-label "apply_loop2_end")
+			(>add sp R1)
+			(>push R1)
+			(>push (>indd (>stack "1") "1"))
+			(>calla (>indd (>stack "1") "2"))
+			(>drop "1")
+			(>pop R1)
 			(>drop R1)
+			(>pop FP)
 		)))
 
 (define add-encoder
@@ -123,6 +149,7 @@
 			(>mov R0 (>imm "0"))
 			(>mov R2 (>fparg 1))
 			(>mov R3 (>imm "1"))
+			(>jmp "op_add_end")
 			(>for-loop "2"
 					   (base+displ R2 "2")
 					   >inc
@@ -518,6 +545,20 @@
 			(>drop R1)
 		)))
 
+(define rational?-encoder
+	(lambda()
+		(>>scheme-function
+			(>mov R0 sob-true)
+			(>mov R1 (>>arg "0"))
+			(>mov R1 (>ind R1))
+			(>cmp R1 t_rational)
+			(>jeq "pred_eq_end")
+			(>cmp R1 t_integer)
+			(>jeq "pred_eq_end")
+			(>mov R0 sob-false)
+			(>make-label "pred_rational_end")
+		)))
+
 (define max-library-functions-encoders
 	`((not . ,not-encoder)
 	  (eq? . ,eq?-encoder)
@@ -535,4 +576,5 @@
 	  (make-vector . ,make-vector-encoder)
 	  (make-string . ,make-string-encoder)
 	  (vector . ,vector-encoder)
+	  (rational? . ,rational?-encoder)
 	))

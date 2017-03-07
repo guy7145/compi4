@@ -2611,8 +2611,7 @@
         `(procedure? ,t_closure)
         `(string? ,t_string)
         `(symbol? ,t_symbol)
-        `(vector? ,t_vector)
-        `(rational? ,t_rational)))
+        `(vector? ,t_vector)))
 
 
 
