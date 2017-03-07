@@ -114,32 +114,35 @@
         (l-stacking-arguments-loop "l_apply_stacking_arguments_loop")
         (l-finished-stacking-arguments "l_apply_finished_stacking_arguments")
         (l-move-frame-to-base-loop "l_apply_move_frame_to_base_loop")
-        (l-finished-moving-frame-to-base "l_apply_finished_moving_frame_to_base"))
+        (l-finished-moving-frame-to-base "l_apply_finished_moving_frame_to_base")
+        ;; variables for flipping the list elements in the stack
+        (length-i r4)
+        (length/2 r3)
+        (tmp r2))
     
     (lambda()
-      (nl-string-append ;"INFO"
-                        (>mov fp sp) ; we will use macro (>>arg ...) as if f argument doesn't exist and (>>arg "0") [fparg(2)] is the first not-f non-list argument
+      (nl-string-append (>mov fp sp) ; we will use macro (>>arg ...) as if 'f' argument doesn't exist and (>>arg "0") [fparg(2)] is the first not-f non-list argument
 
+                        ;; calculate and backup important variables 
+                        ;; position sp in a conveniont position above the normal arguments
+                        ;;
                         (>pop ret)  ; ret
                         (>drop "1") ; apply's env
                         (>pop n)    ; n (num of args)
                         (>pop f)    ; func
-
-                        
-                        
                         (>mov env-f (>indd f "1"))
                         (>mov body-label-f (>indd f "2"))
-
                         (>mov sp-backup sp)
                         (>sub n "2") ; sub f and lst; n <-- n-2
                         (>sub sp n); point at lst
                         (>pop lst)
-
-
                         (>add sp "1") ; so we won't overwrite arguments while 
-                        (>add sp n)   ; retrieving list's elements 
-
-                        ;; push list elements abovethe rest of the arguments
+                        (>add sp n)   ; retrieving list's elements
+                        
+                        
+                        
+                        ;; push list elements above the rest of the arguments
+                        ;;
                         (>mov length "0")
                         
                         (>make-label l-push-list-elements-loop)
@@ -150,14 +153,46 @@
                         (>mov car (>indd lst car-offset))
                         (>mov lst (>indd lst cdr-offset))
                         (>push car)
-                        ;(format "SHOW(\"car:\", INDD(R9, 1));")
+                        ;"SHOW(\"car:\", R9);"
                         (>jmp l-push-list-elements-loop)
-                        
-                        ;(format "SHOW(\"length:\", R15);")
-
                         (>make-label l-finished-pushing-list-elements)
-
-                        ;; push rest of the arguments atop the list elements 
+                        
+                        
+                        ;"INFO"
+                        
+                        ;; flip list elements in stack
+                        ;;
+                        (>mov length/2 (string-append length "/2")) ; calc length / 2
+                        ;(string-append "SHOW(\"length:\", " length ");")
+                        ;(string-append "SHOW(\"length/2:\", " length/2 ");")
+                        
+                        (>mov my-loop-counter "0")
+                        
+                        (>add sp "1") ; for the >starg macro
+                        
+                        (>make-label "head")
+                        (>cmp my-loop-counter length/2)
+                        (>jge "exit")
+                        
+                        (>mov length-i length)
+                        (>sub length-i my-loop-counter)
+                        (>sub length-i "1")
+                        
+                        (>mov tmp (>starg my-loop-counter))
+                        (>mov (>starg my-loop-counter) (>starg length-i))
+                        (>mov (>starg length-i) tmp)
+                        (>inc my-loop-counter)
+                        (>jmp "head")
+                        
+                        (>make-label "exit")
+                        
+                        (>sub sp "1")
+                        
+                        ;"INFO"
+                        ;"SHOW(\"flipped:\", R9);"
+                        
+                        ;; re-push rest of the arguments atop the list elements
+                        ;;
                         (>mov my-loop-counter n)
                         
                         (>make-label l-stacking-arguments-loop)
@@ -168,31 +203,39 @@
                         (>jmp l-stacking-arguments-loop)
                         (>make-label l-finished-stacking-arguments)
                         
+                        
+                        
                         ;; move sp-backup to the start of the frame:
                         (>sub sp-backup n)
                         (>sub sp-backup "1")
                         
+                        
+                        ;; move fp to a convenient position above the frame (in a way we can use '>>arg' macro):
                         ;;
                         (>add sp-backup n)
                         (>add sp-backup length)
                         (>mov fp sp-backup)
                         (>add fp "4")
                         
-                        ;; move all normal arguments to the base of the frame
+                        
+                        ;; move all arguments to the base of the frame (both normal arguments and list elements)
+                        ;;
                         (>mov my-loop-counter n)
                         (>add my-loop-counter length)
-                        
+
                         (>make-label l-move-frame-to-base-loop)
-                        (>cmp my-loop-counter length)
+                        (>cmp my-loop-counter "0")
                         (>jeq l-finished-moving-frame-to-base)
                         (>dec my-loop-counter)
                         (>mov (>>arg my-loop-counter) (>starg my-loop-counter))
                         (>jmp l-move-frame-to-base-loop)
                         (>make-label l-finished-moving-frame-to-base)
                         
-                        ;; recalculate n (add number of list elements)
+                        
+                        ;; re-calculate n (number of normal arguments + number of list elements)
                         (>add n length)
                         
+                        ;; restore sp:
                         (>mov sp sp-backup)
                         
                         ;; push ret, env and n
@@ -200,9 +243,9 @@
                         (>push env-f)
                         (>push ret)
                         
+                        ;; jump to the body of f
                         (>jmp-a body-label-f)
-                        )
-      )))
+                        ))))
 
 
 
