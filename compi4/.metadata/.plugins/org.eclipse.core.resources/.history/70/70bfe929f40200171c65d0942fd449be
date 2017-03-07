@@ -96,125 +96,75 @@
      )))
 
 (define apply-encoder
-  (let ((ret r11)
-        (env-f r12) ; f's enviroment
-        (n r13) ; number of arguments
-        (f r14) ; f's obj
-        (body-label-f r14) ; f's body label
-        (lst r10)
-        (car r9)
-        (cdr r8)
-        (car-offset "1")
-        (cdr-offset "2")
-        (length r15)
-        (sp-backup r6)
-        (my-loop-counter r5)
-        (l-push-list-elements-loop "l_apply_push_list_elements_loop")
-        (l-finished-pushing-list-elements "l_apply_finished_pushing_list_elements")
-        (l-stacking-arguments-loop "l_apply_stacking_arguments_loop")
-        (l-finished-stacking-arguments "l_apply_finished_stacking_arguments")
-        (l-move-frame-to-base-loop "l_apply_move_frame_to_base_loop")
-        (l-finished-moving-frame-to-base "l_apply_finished_moving_frame_to_base"))
-    
-    (lambda()
-      (nl-string-append ;"INFO"
-                        (>mov fp sp) ; we will use macro (>>arg ...) as if f argument doesn't exist and (>>arg "0") [fparg(2)] is the first not-f non-list argument
+  (lambda()
+		#|(>>scheme-function
+			(>push FP)
+			(>mov FP SP)
+			(>mov R1 (>imm "0"))   ; counter of args
+			(>mov R2 (>stack "0")) ; list of args
 
-                        (>pop ret)  ; ret
-                        (>drop "1") ; apply's env
-                        (>pop n)    ; n (num of args)
-                        (>pop f)    ; func
+			(>make-label "apply_loop")
+			(>cmp R2 sob-nil)			; while list != null
+			(>jeq "apply_loop_end")
+			(>push (>indd R2 "1"))		; push car
+			(>mov R2 (>indd R2 "2"))	; list = (cdr list)
+			(>inc R1)					; counter++
+			(>jmp "apply_loop")
 
-                        
-                        
-                        (>mov env-f (>indd f "1"))
-                        (>mov body-label-f (>indd f "2"))
+			(>make-label "apply_loop_end")
+			(>sub SP R1)
+			(>mov R2 (>imm "0"))
+			(>mov R3 R1)
+			(>div R3 (>imm "2"))
 
-                        (>mov sp-backup sp)
-                        (>sub n "2") ; sub f and lst; n <-- n-2
-                        (>sub sp n); point at lst
-                        (>pop lst)
+			(>make-label "apply_loop2")
+			(>cmp R2 R3)
+			(>jne "apply_loop2_end")
+			(>mov R4 SP)
+			(>add R4 R2)
+			(>mov R4 (>stack R4))
+			(>mov R5 R1)
+			(>dec R5)
+			(>sub R5 R2)
+			(>add R5 SP)
+			(>mov (>stack (base+displ R2 SP)) (>stack R5))
+			(>mov (>stack R5) R4)
+			(>inc R2)
+			(>jmp "apply_loop2")
 
+			(>make-label "apply_loop2_end")
+			(>add sp R1)
+			(>push R1)
+			(>push (>indd (>stack "1") "1"))
+			(>calla (>indd (>stack "1") "2"))
+			(>drop "1")
+			(>pop R1)
+			(>drop R1)
+			(>pop FP)
+         
+		)|#
+    (let ((l-zero-args "L_APPLY_NO_ARGS_")
+          (l-exit "L_APPLY_EXIT"))
+    (nl-string-append (>pop r11) ; ret
+                      (>drop (>imm "1")) ; apply's env
+                      (>pop r12) ; n (num-of-args)
+                      (>pop r13) ; f
 
-                        (>add sp "1") ; so we won't overwrite arguments while 
-                        (>add sp n)   ; retrieving list's elements 
+                      (>dec r12) ; n-1
+                      (>mov r14 (>indd r13 "1")) ; f's env
 
-                        ;; push list elements abovethe rest of the arguments
-                        (>mov length "0")
-                        
-                        (>make-label l-push-list-elements-loop)
-                        (>cmp (>ind lst) t_pair) ; (improper lists?)
-                        (>jne l-finished-pushing-list-elements)
-                        
-                        (>inc length)
-                        (>mov car (>indd lst car-offset))
-                        (>mov lst (>indd lst cdr-offset))
-                        (>push car)
-                        ;(format "SHOW(\"car:\", INDD(R9, 1));")
-                        (>jmp l-push-list-elements-loop)
-                        
-                        ;(format "SHOW(\"length:\", R15);")
+                      (>cmp r12 (>imm "0"))
+                      (>jeq l-zero-args)
+                      
+                      (>push r12)
+                      (>push r14)
+                      (>push r11)
 
-                        (>make-label l-finished-pushing-list-elements)
-
-                        ;; push rest of the arguments atop the list elements 
-                        (>mov my-loop-counter n)
-                        
-                        (>make-label l-stacking-arguments-loop)
-                        (>cmp my-loop-counter "0")
-                        (>jlt l-finished-stacking-arguments)
-                        (>dec my-loop-counter)
-                        (>push (>>arg my-loop-counter))
-                        (>jmp l-stacking-arguments-loop)
-                        (>make-label l-finished-stacking-arguments)
-                        
-                        ;; move sp-backup to the start of the frame:
-                        (>sub sp-backup n)
-                        (>sub sp-backup "1")
-                        
-                        ;;
-                        (>add sp-backup n)
-                        (>add sp-backup length)
-                        (>mov fp sp-backup)
-                        (>add fp "4")
-                        
-                        ;; move all normal arguments to the base of the frame
-                        (>mov my-loop-counter n)
-                        (>add my-loop-counter length)
-                        
-                        (>make-label l-move-frame-to-base-loop)
-                        (>cmp my-loop-counter length)
-                        (>jeq l-finished-moving-frame-to-base)
-                        (>dec my-loop-counter)
-                        (>mov (>>arg my-loop-counter) (>starg my-loop-counter))
-                        (>jmp l-move-frame-to-base-loop)
-                        (>make-label l-finished-moving-frame-to-base)
-                        
-                        ;; recalculate n (add number of list elements)
-                        (>add n length)
-                        
-                        (>mov sp sp-backup)
-                        
-                        ;; push ret, env and n
-                        (>push n)
-                        (>push env-f)
-                        (>push ret)
-                        
-                        (>jmp-a body-label-f)
-                        )
-      )))
-
-
-
-
-
-
-
-
-
-
-
-
+                      
+                      (>make-label l-exit)
+                      (>jmp-a (>indd r13 "2")) ; f's body
+                      ))
+    ))
 
 (define add-encoder
   (lambda()
