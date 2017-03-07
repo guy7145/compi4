@@ -1,0 +1,27 @@
+!SESSION 2017-03-07 00:04:33.883 -----------------------------------------------
+eclipse.buildId=debbuild
+java.version=1.8.0_121
+java.vendor=Oracle Corporation
+BootLoader constants: OS=linux, ARCH=x86_64, WS=gtk, NL=en_US
+Command-line arguments:  -os linux -ws gtk -arch x86_64
+
+!ENTRY org.eclipse.jface 2 0 2017-03-07 00:04:53.105
+!MESSAGE Keybinding conflicts occurred.  They may interfere with normal accelerator operation.
+!SUBENTRY 1 org.eclipse.jface 2 0 2017-03-07 00:04:53.105
+!MESSAGE A conflict occurred for F9:
+Binding(F9,
+	ParameterizedCommand(Command(org.schemeway.plugins.schemescript.eval.start,Start Interpreter,
+		Starts the Scheme interpreter and show the console,
+		Category(Scheme Editing,Scheme Editing,Scheme-specific editing commands,true),
+		,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.ui.contexts.window,,,system)
+Binding(F9,
+	ParameterizedCommand(Command(org.eclipse.cdt.make.ui.targetBuildLastCommand,Rebuild Last Target,
+		Rebuild the last make target for the selected container or project.,
+		Category(org.eclipse.ui.category.project,Project,null,true),
+		org.eclipse.cdt.make.ui.actions.BuildLastTargetHandler,
+		,,true),null),
+	org.eclipse.ui.defaultAcceleratorConfiguration,
+	org.eclipse.ui.contexts.window,,,system)

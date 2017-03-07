@@ -3,7 +3,11 @@
 
 (define compile-and-make-comparison-script
   (let ((compare-script-file "automated-compare-tests.scm")
-        (filenames (list "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "lib-functions" "append" "tc-applic" "some-test-cases" "a22")) ; "test06" "cse-example" "lambda-var" "lambda-opt" "lambda-opt-var-stack-fix" "rationals" "numbers-and-booleans" "if-test" "or-tests" "max-lib-tests" "simple-example" "lambda-simple-and-applic"
+<<<<<<< HEAD
+        (filenames (list "lib-functions" "append" "tc-applic" "some-test-cases" )) ; "test06" "cse-example" "lambda-var" "lambda-opt" "lambda-opt-var-stack-fix" "rationals" "numbers-and-booleans" "if-test" "or-tests" "max-lib-tests" "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "simple-example" "lambda-simple-and-applic"
+=======
+        (filenames (list "lib-functions" "some-test-cases" "append" "max-lib-tests" "tc-applic" )) ; "test06" "cse-example" "lambda-var" "lambda-opt" "lambda-opt-var-stack-fix" "rationals" "numbers-and-booleans" "if-test" "or-tests" "max-lib-tests" "eq?" "vectors-and-lists" "test03" "variable-scopes" "scheme-written-lib-functions" "simple-example" "lambda-simple-and-applic"
+>>>>>>> c42691d80a562298b015da05ec4a9f7a1d2f2a88
         (prologue "
 (load \"tdd-tools.scm\")
 #|

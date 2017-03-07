@@ -2099,15 +2099,15 @@
      (>make-label body-label)
      (>push fp)
      (>mov fp sp)
-
+     
      (>comment (format "stack-fix:"))
      stack-fix ;; <------- stack fix for lambda-opt and lambda-var
      (>comment (format "end of stack-fix"))
-
+     
      (code-gen (+ 1 major) body)
-
+     
+     (>mov sp fp)
      (>pop fp)
-
      (>ret)
      (>make-label exit-label)
      (>comment (format "end of lambda."))
@@ -2123,7 +2123,9 @@
         (if3-exit (label-generator "if3_exit_"))
         (or-exit (label-generator "or_exit_"))
         (lambda-body (label-generator "closure_body_"))
-        (lambda-exit (label-generator "closure_exit_")))
+        (lambda-exit (label-generator "closure_exit_"))
+        (^loop-head-label (label-generator "l_loop_head_"))
+        (^loop-exit-label (label-generator "l_loop_exit_")))
 
     (let ((^run
            (lambda (sym-tbl fvars indexed-consts)
@@ -2270,45 +2272,109 @@
 
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
-                              (lambda (func exprs)
+                              #|(lambda (func exprs)
                                 (let ((num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
+                                                    
                                                     (string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
                                                           exprs))
-                                                    (>push num-of-args)
+                                                    (>push (>imm num-of-args))
                                                     
                                                     (code-gen major func)
                                                     
                                                     (>push (>indd R0 "1")) ; enviroment
-                                                    ;"SHOW(\"tc:\", SP);"
                                                     
+                                                    (>mov R2 (>fparg -2))
                                                     
-                                                    ;; backup return-addr and old fp
-                                                    ;;
-                                                    (>mov R1 (>fparg -1)) ; ret
-                                                    (>mov R2 (>fparg -2)) ; old-fp
+                                                    (>mov R3 (>fparg 1)) ; old num of args
+                                                    (>add R3 (>imm "4"))
                                                     
-                                                    ;; mov sp to the bottom of the frame
-                                                    (>mov sp R2)
+                                                    (>mov R5 sp)
+                                                    (>mov R6 fp)
                                                     
-                                                    ;; push arguments, num-of-args (new) and enviroment
-                                                    ;;
-                                                    (>for-loop "0"
-                                                               (base+displ num-of-args "2")
+                                                    (>mov R8 (>imm (base+displ num-of-args "3")))
+                                                    
+                                                    (>for-loop "1"
+                                                               (>imm (base+displ num-of-args "3"))
                                                                >inc
-                                                               >jge
-                                                               (>push (>fparg-nan (base-displ "-3" loop-counter)))
-                                                               )
+                                                               >jgt
+                                                               (>sub R3 (>imm "1"))
+                                                               (>sub R8 (>imm "1"))
+                                                               
+                                                               (>mov (>indd R6 R3) (>indd R5 R8)))
+                                                    (>drop "3")
+                                                    (>drop (>imm num-of-args))
+                                                    (>drop "1")
                                                     
-                                                    ;; push old return-address
-                                                    (>push r1)
+                                                    (>mov fp R2)
+                              
+                                                    (>jmp-a (>indd R0 "2"))
+                                                    ))))|#
+                              (lambda (func exprs)
+                                (let ((loop-head-label (^loop-head-label))
+                                      (loop-exit-label (^loop-exit-label))
+                                      (map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+                                      (num-of-args (number->string (length exprs)))
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
                                                     
-                                                    ;; restore old fp
-                                                    (>mov fp r2)
-                                                    ;"INFO"
+                                                    (string-append-list
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
+                                                    (>push (>imm num-of-args))
+                                                    
+                                                    (code-gen major func)
+                                                    
+                                                    (>sub sp (>imm (base+displ num-of-args "1")))
+                                                    (>pop R1)
+                                                    (>pop R2)
+                                                    (>pop R3)
+                                                    (>pop R4)
+                                                    (>push R1)
+                                                    (>push R2)
+                                                    (>push R3)
+                                                    (>push R4)
+                                                    
+                                                    (>mov R5 sp)
+                                                    (>add sp (>imm (base+displ num-of-args "1")))
+                                                    
+                                                    (>push (>indd R0 "1"))
+                                                    (>push R2)
+                                                    
+                                                    (>mov R6 "0")
+                                                    (>add R4 "4")
+                                                    
+                                                    (>sub R4 "2*R4")
+                                                    
+                                                    (>make-label loop-head-label)
+                                                    (>cmp R6 (>imm (base+displ num-of-args "3")))
+                                                    (>jeq loop-exit-label)
+                                                    
+                                                    (>mov R7 R4)
+                                                    (>mov R8 R6)
+                                                    (>add R8 R5)
+                                                    (>add R7 R6)
+                                                    (>add R7 R5)
+                                                    (>mov (>stack R7) (>stack R8))
+                                                    
+                                                    (>inc R6)
+                                                    (>jmp loop-head-label)
+                                                    
+                                                    
+                                                    (>make-label loop-exit-label)
+                                                    
+                                                    (>sub R4 "2*R4")
+                                                    (>sub R6 R4)
+                                                    (>mov sp R5)
+                                                    (>add sp R6)
+                                                    
+                                                    (>mov fp R1)
+                                                    
+                                                    
                                                     
                                                     (>jmp-a (>indd R0 "2"))
                                                     ))))
@@ -2636,25 +2702,7 @@
                  (>mov R0 sob-true)       ;
 
                  (>make-label label-exit) ; exit:
-
                  )
-
-#|                (nl-string-append (>push fp)
-                                  (>mov fp sp)
-
-                                  (>mov R0 (>fparg 2))     ; mov r0, argument
-                                  (>cmp (>ind R0) type)    ; cmp r0, t_?
-                                  (>jeq label-eq)          ; jump_eq equal
-                                  (>mov R0 sob-false)      ; mov r0, #f
-                                  (>jmp label-exit)        ; jmp exit
-                                  (>make-label label-eq)   ; equal:
-                                  (>mov R0 sob-true)       ; mov r0, #t
-
-                                  (>make-label label-exit) ; exit:
-                                  (>mov sp fp)
-                                  (>pop fp)
-                                  (>ret)
-                                  )|#
                 ))))))
 
 
@@ -2767,14 +2815,27 @@
                     (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
                     (lambda (x) (>add x "2"))
                     >jge
-                    (>cmp R0 (>indd SYMBOL_TABLE_BASE_ADDR loop-counter))
-                    (compare-symbol-and-string
-                     (nl-string-append (>dec loop-counter)
-                                       (>mov R0 (>imm (base+displ loop-counter SYMBOL_TABLE_BASE_ADDR)))
-                                       (>jmp exit-label)
-                                       )
-                     ""  ;; nothing to do if false
-                     ))
+
+                    (>mov R5 (>indd SYMBOL_TABLE_BASE_ADDR loop-counter))
+                    (>cmp R6 (>indd R5 "1"))
+                    (>jgt "min_length_is_set")
+                    (>mov R6 (>indd R0 "1"))
+                    (>make-label "min_length_is_set")
+
+                    (>for-loop-inner "2"
+                                     (base+displ R6 "2")
+                                     >inc
+                                     >jgt
+                                     (>cmp (>indd R5 loop-counter-inner) (>indd R0 loop-counter-inner))
+                                     (>jne "string_are_not_matching"))
+
+
+                    (>dec loop-counter)
+                    (>mov R0 (>imm (base+displ loop-counter SYMBOL_TABLE_BASE_ADDR)))
+                    (>jmp exit-label)
+
+                    (>make-label "string_are_not_matching")
+                    )
 
          ;; encode new symbol into the symbol table
          (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) R0)
@@ -3066,20 +3127,14 @@
   (let* ((^skip-label (label-generator "skip_print_"))
          (prologue nl)
          (epilogue (lambda (skip-label) (nl-string-append
-                                         #|
-                                         "INFO"
-                                         "SHOW(\"sp:\", SP);"
-                                         "SHOW(\"result:\", R0);"
-                                         "HALT"
-                                         |#
+                                         
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
                                          (>push r0)
                                          (>call "WRITE_SOB")
                                          (>drop "1")
                                          (>call "NEWLINE")
-
-
+                                         
                                          (>make-label skip-label)
                                          ))))
     (lambda (code)
@@ -3092,9 +3147,7 @@
 ;;
 (define prologue "
 /* change to 0 for no debug info to be printed: */
-#define DO_SHOW 1
-
-#include \"arch/debug_macros.h.c\"
+#define DO_SHOW 0
 
 #include <stdio.h>
 #include <stdlib.h>

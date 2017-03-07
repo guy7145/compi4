@@ -15,6 +15,10 @@
   (lambda (code)
     (fold-left (lambda (acc el) (union acc (get-inst-read el))) '() code)))
 
+(define get-all-writes
+  (lambda (code)
+    (fold-left (lambda (acc el) (union acc (get-inst-write el))) '() code)))
+
 (define remww
   (letrec ((remove-ww (lambda (code reads)
                         (if (null? code)
@@ -28,4 +32,6 @@
                                                                       (subtraction reads (get-inst-write current-instruction)))))
                                     (remove-ww rest-instructions reads)))))))
     (lambda (code)
-      (reverse (remove-ww (reverse code) (get-all-reads code))))))
+      (reverse (remove-ww (reverse code) (union (get-all-reads code) (get-all-writes code)))))))
+
+

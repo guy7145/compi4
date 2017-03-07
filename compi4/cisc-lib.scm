@@ -9,24 +9,6 @@
 (define nl-string-append-list
   (lambda (list)
     (fold-left nl-string-append "" list)))
-#|
-;; for debugging purposes ONLY!!!
-(define string-append
-  (lambda x
-    (display-green x)
-    (string-append-list x)))
-|#
-#|
-(define ocar car)
-(define car (lambda (x) (display-colored-BIG x) (ocar x)))
-|#
-
-(define DEBUG-PRINT
-  (lambda (obj)
-    (nl-string-append (>push obj)
-                      (>call "WRITE_SOB")
-                      drop1
-                      (>call "NEWLINE"))))
 
 ;; registers
 (define register-generator (label-generator "R"))
@@ -70,7 +52,7 @@
 
 ;; constants
 ;; 
-(define CONST_TABLE_ACTUAL_ADDRESS "1000000")
+(define CONST_TABLE_ACTUAL_ADDRESS "Mega(400)")
 (define CONST_TABLE_BASE_ADDR "consts_addr")
 (define FVARS_TABLE_BASE_ADDR "fvars_addr")
 (define SYMBOL_TABLE_BASE_ADDR "sym_tbl_addr")
@@ -277,6 +259,22 @@
                         (++ loop-counter)
                         (>jmp loop-head-label)
                         (>make-label loop-exit-label)))))
+
+(define loop-counter-inner R15)
+(define >for-loop-inner
+  (lambda (start end ++ cond-jump . body)
+    (let ((loop-head-label (LOOP-HEAD-LABEL))
+          (loop-exit-label (LOOP-EXIT-LABEL))
+          (body (nl-string-append-list body)))
+      (nl-string-append (>mov loop-counter-inner start)
+                        (>make-label loop-head-label)
+                        (>cmp loop-counter-inner end)
+                        (cond-jump loop-exit-label)
+                        body
+                        (++ loop-counter-inner)
+                        (>jmp loop-head-label)
+                        (>make-label loop-exit-label)))))
+
 
 (define >comment
   (lambda (x)

@@ -12,7 +12,7 @@
 ;;;
 ;;; Programmer: Mayer Goldberg, 2010
 
-((lambda (x) (x x 100000))
+((lambda (x) (x x 1000000))
  (lambda (x n)
    (if  (zero? n) 
 	#t
