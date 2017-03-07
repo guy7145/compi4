@@ -1,5 +1,7 @@
-(apply list 1 2 3 '(4))
+(list 1 2 3 '())
 (apply list 1 2 3 '())
+(apply list 1 2 3 '(4))
+(apply list 1 2 3 '(4 5))
 (apply list 1 2 4 5 6 7 8 9 '(0))
 (apply list 1 2 4 5 6 7 8 9 '(10 11 12 13 14))
 (apply list 1 2 4 5 6 7 8 9 '(10 11 12 13 14) '(15 16 17))

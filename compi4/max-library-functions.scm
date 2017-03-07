@@ -141,7 +141,7 @@
 
                         ;; push list elements abovethe rest of the arguments
                         (>mov length "0")
-                        ;"INFO"
+                        
                         (>make-label l-push-list-elements-loop)
                         (>cmp (>ind lst) t_pair) ; (improper lists?)
                         (>jne l-finished-pushing-list-elements)
@@ -160,39 +160,27 @@
                         ;; push rest of the arguments atop the list elements 
                         (>mov my-loop-counter n)
                         
-                        ;(format "SHOW(\"alive 1:\", R13);")
-                        
                         (>make-label l-stacking-arguments-loop)
                         (>cmp my-loop-counter "0")
-                        (>jeq l-finished-stacking-arguments)
+                        (>jlt l-finished-stacking-arguments)
                         (>dec my-loop-counter)
                         (>push (>>arg my-loop-counter))
                         (>jmp l-stacking-arguments-loop)
                         (>make-label l-finished-stacking-arguments)
                         
-                        ;(format "SHOW(\"alive 2:\", SP);")
-                        
                         ;; move sp-backup to the start of the frame:
-                        ;(format "SHOW(\"sp-backup:\", R6);")
                         (>sub sp-backup n)
                         (>sub sp-backup "1")
-                        ;(format "SHOW(\"sp-backup again:\", R6);")
-                        ;"INFO"
-                        ;;
+                        
                         ;;
                         (>add sp-backup n)
                         (>add sp-backup length)
                         (>mov fp sp-backup)
                         (>add fp "4")
                         
-                        ;(format "SHOW(\"sp-backup last almost:\", R6);")
-                        
                         ;; move all arguments to the base of the frame (both normal arguments and list elements)
                         (>mov my-loop-counter n)
                         (>add my-loop-counter length)
-                        
-                        ;(format "SHOW(\"moving frame down args, n:\", R13);")
-                        ; "INFO"
                         
                         (>make-label l-move-frame-to-base-loop)
                         (>cmp my-loop-counter "0")
@@ -201,11 +189,6 @@
                         (>mov (>>arg my-loop-counter) (>starg my-loop-counter))
                         (>jmp l-move-frame-to-base-loop)
                         (>make-label l-finished-moving-frame-to-base)
-                        
-                        ;(format "SHOW(\"alive:\", R5);")
-                        ;"INFO"
-                        
-                        ;(format "SHOW(\"finished -replacing args, n:\", R13);")
                         
                         ;; recalculate n (add number of list elements)
                         (>add n length)
