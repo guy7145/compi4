@@ -2974,6 +2974,7 @@
                             (vector-ref . ,vector-ref-encoder)
                             (zero? . ,zero?-encoder)
                             (string-set! . ,string-set!-encoder)
+                            (vector-set! . ,vector-set!-encoder)
                             (symbol->string . ,symbol->string-encoder)
                             (string->symbol . ,string->symbol-encoder)
                             ,@max-library-functions-encoders
@@ -3189,17 +3190,19 @@ return 0;
 (define list (lambda x x))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
 (define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+
+
+(define append-helper (lambda (c e)
+                        (if (null? e)
+                          c
+                          (if (null? c)
+                              (append-helper (car e) (cdr e))
+                              (if (pair? c)
+                                  (cons (car c) (append-helper (cdr c) e))
+                                  c)))))
 (define append
-  (letrec ((append-helper (lambda (c e)
-                            (if (null? c)
-                                (if (null? e)
-                                    '()
-                                    (append-helper (car e) (cdr e)))
-                                (if (pair? c)
-                                    (cons (car c) (append-helper (cdr c) e))
-                                    c)))))
-    (lambda elements
-      (append-helper '() elements))))
+  (lambda elements
+    (append-helper '() elements)))
 ")
 
 (define compile-scheme-file

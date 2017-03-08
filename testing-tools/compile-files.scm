@@ -25,6 +25,7 @@
          ;(filenames `(,@filenames "apply"))
          ;(filenames `(,@filenames "test03"))
          ;(filenames `(,@filenames "string-to-symbol"))
+         (filenames `(,@filenames "append"))
          ;(filenames `(,@filenames "test09"))
          (prologue "
 (load \"tdd-tools.scm\")
