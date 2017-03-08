@@ -2002,10 +2002,8 @@
             (num-of-args (number->string num-of-args))
             (fp-backup R13))
         (nl-string-append
-         ;"SHOW(\"stack fix \", FP);"
          (>pop fp-backup)
          (>push fp-backup)
-         ;"SHOW(\"fp backup \", R13);"
          
          ;; pack non-elementary arguments into a list (or sob_nil if there are none)
          (>mov actual-num-of-args (>fparg 1))
@@ -2053,8 +2051,6 @@
 
          ;; exit:
          (>make-label l-done-fixing)
-         ;"SHOW(\"fp backup \", R13);"
-         ;"SHOW(\"stack fix \", FP);"
          )))))
 
 (define lambda-code-gen
@@ -2062,7 +2058,7 @@
 
     (nl-string-append
      (>comment (format "lambda code-gen, body: ~s" body))
-     ;"SHOW(\"lambda \", FP);"
+     
      ;; allocate space for new enviroment
      (>mov-res R2
                (>malloc (number->string (+ 1 major)))) ; R2 <- new env (empty)
@@ -2103,8 +2099,6 @@
 
      (>make-label body-label)
      
-     ;"INFO"
-     ;"SHOW(\"lambda \", FP);"
      (>push fp)
      (>mov fp sp)
      
@@ -2133,7 +2127,15 @@
         (lambda-body (label-generator "closure_body_"))
         (lambda-exit (label-generator "closure_exit_"))
         (^loop-head-label (label-generator "l_loop_head_"))
-        (^loop-exit-label (label-generator "l_loop_exit_")))
+        (^loop-exit-label (label-generator "l_loop_exit_"))
+        
+        ; tc applic
+        (^l-push-list-elements-loop (label-generator "l_tc_applic_push_list_elements_loop"))
+        (^l-finished-pushing-list-elements (label-generator "l_tc_applic_finished_pushing_list_elements"))
+        (^l-stacking-arguments-loop (label-generator "l_tc_applic_stacking_arguments_loop"))
+        (^l-finished-stacking-arguments (label-generator "l_tc_applic_finished_stacking_arguments"))
+        (^l-move-frame-to-base-loop (label-generator "l_tc_applic_move_frame_to_base_loop"))
+        (^l-finished-moving-frame-to-base (label-generator "l_tc_applic_finished_moving_frame_to_base")))
 
     (let ((^run
            (lambda (sym-tbl fvars indexed-consts)
@@ -2282,8 +2284,29 @@
                               (lambda (func exprs)
                                 (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
                                       (num-of-args (number->string (length exprs)))
-                                      (exprs (reverse exprs)))
-                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
+                                      (exprs (reverse exprs))
+                                      (ret r11)
+                                      (env-f r12) ; f's enviroment
+                                      (n r13) ; number of arguments
+                                      (f r14) ; f's obj
+                                      (body-label-f r14) ; f's body label
+                                      (lst r10)
+                                      (car r9)
+                                      (cdr r8)
+                                      (car-offset "1")
+                                      (cdr-offset "2")
+                                      (length r15)
+                                      (sp-backup r6)
+                                      (my-loop-counter r5)
+                                      (l-push-list-elements-loop (^l-push-list-elements-loop))
+                                      (l-finished-pushing-list-elements (^l-finished-pushing-list-elements))
+                                      (l-stacking-arguments-loop (^l-stacking-arguments-loop))
+                                      (l-finished-stacking-arguments (^l-finished-stacking-arguments))
+                                      (l-move-frame-to-base-loop (^l-move-frame-to-base-loop))
+                                      (l-finished-moving-frame-to-base (^l-finished-moving-frame-to-base))
+                                      )
+
+                                  (nl-string-append (>comment (format "tc applic ~s ~s" func (reverse exprs)))
                                                     (nl-string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
@@ -2322,19 +2345,12 @@
                               (let ((pvar-body-gen (lambda (minor)
                                                      (nl-string-append
                                                       (>mov (>>arg (number->string minor)) r0)
-                                                      ;(string-append "SHOW(\"\", " (>>arg (number->string minor)) ");")
-                                                      
                                                       )
                                                      ))
                                     (bvar-body-gen (lambda (major minor)
-                                                     (nl-string-append "SHOW(\"\", R0)"
-                                                                       (>mov r1 (>fparg 0))       ; env   (get)
-                                                                       "SHOW(\"\", R1)"
+                                                     (nl-string-append (>mov r1 (>fparg 0))       ; env   (get)
                                                                        (>mov r1 (>indd r0 (number->string major))) ; major (get)
-                                                                       (string-append "SHOW(\"\", INDD(R0" (number->string minor) "));")
                                                                        (>mov (>indd r1 (number->string minor)) r0) ; minor (set)
-                                                                       (string-append "SHOW(\"\", INDD(R0" (number->string minor) "));")
-                                                                       ;"HALT"
                                                                        )
                                                      ))
                                     (fvar-body-gen (lambda (fvar-name)
@@ -2348,14 +2364,11 @@
                                                    nl
                                                    (code-gen major val)
                                                    nl
-                                                   ;(begin (display var-type) "")
                                                    (cond ((equal? var-type 'pvar) (pvar-body-gen (caddr var)))
                                                          ((equal? var-type 'bvar) (bvar-body-gen (caddr var) (cadddr var)))
                                                          ((equal? var-type 'fvar) (fvar-body-gen (cadr var)))
                                                          (else (error 'code-gen "(set) this shouldn't happen")))
                                                    (>mov r0 (>imm sob-void))
-                                                   ;(string-append "SHOW(\"set\", R0);")
-                                                   ;"HALT"
                                                    nl)))))
 
                              (pattern-rule
@@ -2826,7 +2839,6 @@
          ;; --> increment the tbl-length of the symbol table
          ;;
          (>make-label l-not-found)
-         ;"SHOW(\"not found\", R1)"
          (>add tbl-length "1")              ; increment tbl-length
          (>mov (>ind tbl-length-ptr) tbl-length) ; update variable
          
