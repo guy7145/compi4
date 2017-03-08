@@ -162,8 +162,6 @@
                         ;; flip list elements in stack
                         ;;
                         (>mov length/2 (string-append length "/2")) ; calc length / 2
-                        ;(string-append "SHOW(\"length:\", " length ");")
-                        ;(string-append "SHOW(\"length/2:\", " length/2 ");")
                         
                         (>mov my-loop-counter "0")
                         

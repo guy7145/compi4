@@ -2127,15 +2127,7 @@
         (lambda-body (label-generator "closure_body_"))
         (lambda-exit (label-generator "closure_exit_"))
         (^loop-head-label (label-generator "l_loop_head_"))
-        (^loop-exit-label (label-generator "l_loop_exit_"))
-        
-        ; tc applic
-        (^l-push-list-elements-loop (label-generator "l_tc_applic_push_list_elements_loop"))
-        (^l-finished-pushing-list-elements (label-generator "l_tc_applic_finished_pushing_list_elements"))
-        (^l-stacking-arguments-loop (label-generator "l_tc_applic_stacking_arguments_loop"))
-        (^l-finished-stacking-arguments (label-generator "l_tc_applic_finished_stacking_arguments"))
-        (^l-move-frame-to-base-loop (label-generator "l_tc_applic_move_frame_to_base_loop"))
-        (^l-finished-moving-frame-to-base (label-generator "l_tc_applic_finished_moving_frame_to_base")))
+        (^loop-exit-label (label-generator "l_loop_exit_")))
 
     (let ((^run
            (lambda (sym-tbl fvars indexed-consts)
@@ -2282,44 +2274,69 @@
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
-                                (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+                                (let ((loop-head-label (^loop-head-label))
+                                      (loop-exit-label (^loop-exit-label))
+                                      (map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
                                       (num-of-args (number->string (length exprs)))
-                                      (exprs (reverse exprs))
-                                      (ret r11)
-                                      (env-f r12) ; f's enviroment
-                                      (n r13) ; number of arguments
-                                      (f r14) ; f's obj
-                                      (body-label-f r14) ; f's body label
-                                      (lst r10)
-                                      (car r9)
-                                      (cdr r8)
-                                      (car-offset "1")
-                                      (cdr-offset "2")
-                                      (length r15)
-                                      (sp-backup r6)
-                                      (my-loop-counter r5)
-                                      (l-push-list-elements-loop (^l-push-list-elements-loop))
-                                      (l-finished-pushing-list-elements (^l-finished-pushing-list-elements))
-                                      (l-stacking-arguments-loop (^l-stacking-arguments-loop))
-                                      (l-finished-stacking-arguments (^l-finished-stacking-arguments))
-                                      (l-move-frame-to-base-loop (^l-move-frame-to-base-loop))
-                                      (l-finished-moving-frame-to-base (^l-finished-moving-frame-to-base))
-                                      )
-
-                                  (nl-string-append (>comment (format "tc applic ~s ~s" func (reverse exprs)))
-                                                    (nl-string-append-list
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
+                                                    
+                                                    (string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
                                                           exprs))
-                                                    (>push num-of-args)
+                                                    (>push (>imm num-of-args))
+                                                    
                                                     (code-gen major func)
-
-                                                    (>push (>indd R0 "1"))
-                                                    (>calla (>indd R0 "2"))
-                                                    (>drop "1")
-
+                                                    
+                                                    (>sub sp (>imm (base+displ num-of-args "1")))
                                                     (>pop R1)
-                                                    (>drop R1)
+                                                    (>pop R2)
+                                                    (>pop R3)
+                                                    (>pop R4)
+                                                    (>push R1)
+                                                    (>push R2)
+                                                    (>push R3)
+                                                    (>push R4)
+                                                    
+                                                    (>mov R5 sp)
+                                                    (>add sp (>imm (base+displ num-of-args "1")))
+                                                    
+                                                    (>push (>indd R0 "1"))
+                                                    (>push R2)
+                                                    
+                                                    (>mov R6 "0")
+                                                    (>add R4 "4")
+                                                    
+                                                    (>sub R4 "2*R4")
+                                                    
+                                                    (>make-label loop-head-label)
+                                                    (>cmp R6 (>imm (base+displ num-of-args "3")))
+                                                    (>jeq loop-exit-label)
+                                                    
+                                                    (>mov R7 R4)
+                                                    (>mov R8 R6)
+                                                    (>add R8 R5)
+                                                    (>add R7 R6)
+                                                    (>add R7 R5)
+                                                    (>mov (>stack R7) (>stack R8))
+                                                    
+                                                    (>inc R6)
+                                                    (>jmp loop-head-label)
+                                                    
+                                                    
+                                                    (>make-label loop-exit-label)
+                                                    
+                                                    (>sub R4 "2*R4")
+                                                    (>sub R6 R4)
+                                                    (>mov sp R5)
+                                                    (>add sp R6)
+                                                    
+                                                    (>mov fp R1)
+                                                    
+                                                    
+                                                    
+                                                    (>jmp-a (>indd R0 "2"))
                                                     ))))
                                                     
                              (pattern-rule
@@ -2431,7 +2448,6 @@
 
 ;; _________construct-tables_______________________________________
 ;; ________________________________________________________________
-(load "tdd-tools.scm")
 
 (define scan-fvars
   (lambda (code)
@@ -2442,6 +2458,10 @@
            acc))
      <initial-fvar-tbl>
      code)))
+
+
+
+
 
 (define disassemble-const
   (lambda (c)
@@ -3145,8 +3165,7 @@
 ;;
 (define prologue "
 /* change to 0 for no debug info to be printed: */
-#define DO_SHOW 1
-#include \"arch/debug_macros.h.c\"
+#define DO_SHOW 0
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -3205,8 +3224,6 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
-           
-           ;(x (begin (display pes) ""))
 
            (tables (get-tables pes))
            (sym-tbl (car tables))
