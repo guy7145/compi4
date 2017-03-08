@@ -78,6 +78,7 @@
 (define t_vector "T_VECTOR")
 (define t_closure "T_CLOSURE")
 (define t_rational "T_RATIONAL")
+(define t_box "9090909090")
 
 ;; backend stuff
 (define nl "\n")

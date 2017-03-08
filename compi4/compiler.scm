@@ -2116,9 +2116,6 @@
      
      (>mov sp fp)
      (>pop fp)
-     ;"SHOW(\"lambda \", FP);"
-     ;"INFO"
-     ;"SHOW(\"lambda \", SP);"
      (>ret)
      (>make-label exit-label)
      (>comment (format "end of lambda."))
@@ -2285,40 +2282,8 @@
                               (lambda (func exprs)
                                 (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
                                       (num-of-args (number->string (length exprs)))
-                                      (exprs (reverse exprs))
-                                      (ret R5))
-                                  (nl-string-append (>comment (format "tc applic ~s ~s" func (reverse exprs)))
-                                                    
-                                                    #|
-                                                    ;"INFO"
-                                                    
-                                                    (>pop fp)
-                                                    (>pop ret)
-                                                    
-                                                    "SHOW(\"fp \", FP);"
-                                                    "SHOW(\"ret \", R5);"
-                                                    
-                                                    (>mov sp fp)
-                                                    
-                                                    "SHOW(\"sp \", SP);"
-                                                    
-                                                    (nl-string-append-list
-                                                     (map (lambda (e) (nl-string-append (code-gen major e)
-                                                                                        (>push R0)))
-                                                          exprs))
-                                                    (>push num-of-args)
-                                                    (code-gen major func)
-
-                                                    (>push (>indd R0 "1"))
-                                                    
-                                                    (>push ret)
-                                                    
-                                                    "INFO"
-                                                    "SHOW(\"\", IND(0));"
-                                                    
-                                                    (>jmp-a (>indd R0 "2"))
-                                                    |#
-                                                    
+                                      (exprs (reverse exprs)))
+                                  (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
                                                     (nl-string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
@@ -2357,8 +2322,8 @@
                               (let ((pvar-body-gen (lambda (minor)
                                                      (nl-string-append
                                                       (>mov (>>arg (number->string minor)) r0)
-                                                      (string-append "SHOW(\"\", " (>>arg (number->string minor)) ");")
-                                                      "HALT"
+                                                      ;(string-append "SHOW(\"\", " (>>arg (number->string minor)) ");")
+                                                      
                                                       )
                                                      ))
                                     (bvar-body-gen (lambda (major minor)
@@ -2369,7 +2334,7 @@
                                                                        (string-append "SHOW(\"\", INDD(R0" (number->string minor) "));")
                                                                        (>mov (>indd r1 (number->string minor)) r0) ; minor (set)
                                                                        (string-append "SHOW(\"\", INDD(R0" (number->string minor) "));")
-                                                                       "HALT"
+                                                                       ;"HALT"
                                                                        )
                                                      ))
                                     (fvar-body-gen (lambda (fvar-name)
@@ -2383,20 +2348,25 @@
                                                    nl
                                                    (code-gen major val)
                                                    nl
-                                                   (begin (display var-type) "")
+                                                   ;(begin (display var-type) "")
                                                    (cond ((equal? var-type 'pvar) (pvar-body-gen (caddr var)))
                                                          ((equal? var-type 'bvar) (bvar-body-gen (caddr var) (cadddr var)))
                                                          ((equal? var-type 'fvar) (fvar-body-gen (cadr var)))
                                                          (else (error 'code-gen "(set) this shouldn't happen")))
                                                    (>mov r0 (>imm sob-void))
-                                                   (string-append "SHOW(\"set\", R0);")
-                                                   "HALT"
+                                                   ;(string-append "SHOW(\"set\", R0);")
+                                                   ;"HALT"
                                                    nl)))))
 
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
                               (lambda (exprs)
-                                (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs))))
+                                (nl-string-append
+                                 (>comment (format "seq: ~s" exprs))
+                                 (string-append-list (map
+                                                      (lambda (expr)
+                                                        (>nl (code-gen major expr)))
+                                                      exprs)))))
 
                              (pattern-rule
                               `(box ,(? 'var))
@@ -2427,10 +2397,14 @@
                               `(box-set ,(? 'var) ,(? 'val))
                               (lambda (var val) (string-append (>comment (format "box-set ~s ~s" var val))
                                                                nl
-                                                               (code-gen major var)
-                                                               (>mov r1 r0)
+                                                               
                                                                (code-gen major val)
-                                                               (>mov (>ind r1) r0))))
+                                                               (>mov r1 r0) ; val is in r1
+                                                               (>push r1)   ; backup r1
+                                                               (code-gen major var) ; var is in r0
+                                                               (>pop r1)    ; restore r1
+                                                               (>mov (>ind r0) r1)
+                                                               )))
 
                              ) e cont))))
                  code-gen)))))
@@ -3190,20 +3164,19 @@ return 0;
 (define list (lambda x x))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
 (define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
-
-
-(define append-helper (lambda (c e)
-                        (if (null? e)
-                          c
-                          (if (null? c)
-                              (append-helper (car e) (cdr e))
-                              (if (pair? c)
-                                  (cons (car c) (append-helper (cdr c) e))
-                                  c)))))
 (define append
-  (lambda elements
-    (append-helper '() elements)))
+  (letrec ((append-helper (lambda (c e)
+                            (if (null? e)
+                                c
+                                (if (null? c)
+                                    (append-helper (car e) (cdr e))
+                                    (if (pair? c)
+                                        (cons (car c) (append-helper (cdr c) e))
+                                        c))))))
+    (lambda elements
+      (append-helper '() elements))))
 ")
+
 
 (define compile-scheme-file
   (lambda (source dest)
@@ -3220,6 +3193,8 @@ return 0;
                        (eliminate-nested-defines
                         (parse sexpr)))))))
                  sexprs))
+           
+           ;(x (begin (display pes) ""))
 
            (tables (get-tables pes))
            (sym-tbl (car tables))

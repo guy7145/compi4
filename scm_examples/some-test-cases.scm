@@ -12,13 +12,6 @@ a
 ;;;
 ;;; Programmer: Mayer Goldberg, 2010
 
-;;((lambda (x) (x x 1000000))
-;; (lambda (x n)
-;;   (if  (zero? n) 
-;;	#t
-;;        (x x (- n 1)))))
-
-
 
 (apply list 1 '())
 (apply list 1 2 '(2))

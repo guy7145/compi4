@@ -1990,27 +1990,79 @@
 ;; ________________________________________________________________ 
 
 (define stack-fix
-  (lambda (num-of-args)
-    (let ((accumulator R6)
-          (actual-num-of-args R5)
-          (list-stack-index (number->string (+ 2 num-of-args)))
-          (num-of-args (number->string num-of-args)))
-      (nl-string-append
-       (>mov actual-num-of-args (>fparg 1))
-       (>mov accumulator sob-nil)
-       (>for-loop actual-num-of-args
-                  num-of-args
-                  >dec
-                  >jle
-                  (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1")))))
-       (>mov (>fparg-nan list-stack-index) accumulator)))))
+  (let ((^l-not-enough-space (label-generator "Stack_fix_L_Not_enough_space_"))
+        (^l-done-fixing (label-generator "Stack_fix_L_Done_fixing_")))
+    (lambda (num-of-args)
+      (let ((l-not-enough-space (^l-not-enough-space))
+            (l-done-fixing (^l-done-fixing))
+            (accumulator R6)
+            (actual-num-of-args R5)
+            (list-stack-index (number->string (+ 2 num-of-args)))
+            (last-arg-index (number->string (- num-of-args 1)))
+            (num-of-args (number->string num-of-args))
+            (fp-backup R13))
+        (nl-string-append
+         ;"SHOW(\"stack fix \", FP);"
+         (>pop fp-backup)
+         (>push fp-backup)
+         ;"SHOW(\"fp backup \", R13);"
+         
+         ;; pack non-elementary arguments into a list (or sob_nil if there are none)
+         (>mov actual-num-of-args (>fparg 1))
+         (>mov accumulator sob-nil)
+         (>for-loop actual-num-of-args
+                    num-of-args
+                    >dec
+                    >jle
+                    (>mov-res accumulator (>cons accumulator (>fparg-nan (base+displ loop-counter "1"))))
+                    )
+
+         ;; jmp to appropriate fix
+         (>cmp actual-num-of-args num-of-args)
+         (>jle l-not-enough-space)
+
+
+         ;; some non-elementary arguments
+         (>drop (base+displ actual-num-of-args "4"))
+         (>push accumulator)
+         (>for-loop (>imm (base+displ num-of-args "-1"))
+                    "0"
+                    >dec
+                    >jlt
+                    (>push (>>arg loop-counter)))
+         (>push (>imm (base+displ num-of-args "1")))
+         (>push (>fparg 0))  ;env
+         (>push (>fparg -1)) ; ret
+         (>push (>fparg -2)) ; fpold
+         (>mov fp sp) ;; fp <- sp
+         (>jmp l-done-fixing)
+
+         
+         ;; no non-elementary arguments
+         (>make-label l-not-enough-space)
+         (>inc sp)
+         (>mov fp sp)
+         (>for-loop "0"
+                    (>imm (base+displ actual-num-of-args "4"))
+                    >inc
+                    >jge
+                    (>mov (>starg loop-counter) (>starg (base+displ loop-counter "1")))
+                    )
+         (>mov (>>arg actual-num-of-args) accumulator)
+         (>mov (>fparg 1) (>imm (base+displ num-of-args "1")))
+
+         ;; exit:
+         (>make-label l-done-fixing)
+         ;"SHOW(\"fp backup \", R13);"
+         ;"SHOW(\"stack fix \", FP);"
+         )))))
 
 (define lambda-code-gen
   (lambda (stack-fix body-label exit-label num-of-params body major code-gen)
 
     (nl-string-append
      (>comment (format "lambda code-gen, body: ~s" body))
-
+     ;"SHOW(\"lambda \", FP);"
      ;; allocate space for new enviroment
      (>mov-res R2
                (>malloc (number->string (+ 1 major)))) ; R2 <- new env (empty)
@@ -2037,8 +2089,8 @@
                 R3
                 >inc
                 >jge
-                (>mov (>indd R0 loop-counter)
-                      (>fparg-nan (string-append loop-counter " + 1"))))
+                (>mov (>indd R0 loop-counter) (>>arg loop-counter))
+                )
 
      ;; create lambda_sob object
      (>comment (format "create lambda_sob object:"))
@@ -2050,18 +2102,23 @@
 
 
      (>make-label body-label)
+     
+     ;"INFO"
+     ;"SHOW(\"lambda \", FP);"
      (>push fp)
      (>mov fp sp)
-
-
+     
      (>comment (format "stack-fix:"))
      stack-fix ;; <------- stack fix for lambda-opt and lambda-var
      (>comment (format "end of stack-fix"))
-
-
+     
      (code-gen (+ 1 major) body)
+     
      (>mov sp fp)
      (>pop fp)
+     ;"SHOW(\"lambda \", FP);"
+     ;"INFO"
+     ;"SHOW(\"lambda \", SP);"
      (>ret)
      (>make-label exit-label)
      (>comment (format "end of lambda."))
@@ -2070,13 +2127,16 @@
 (define get-symbol-offset-in-table
   (lambda (sym-tbl sym)
     (* 2 (index-of sym-tbl sym))))
-;; TODO:
+
+
 (define code-gen
   (let ((if3-else (label-generator "if3_else_"))
         (if3-exit (label-generator "if3_exit_"))
         (or-exit (label-generator "or_exit_"))
         (lambda-body (label-generator "closure_body_"))
-        (lambda-exit (label-generator "closure_exit_")))
+        (lambda-exit (label-generator "closure_exit_"))
+        (^loop-head-label (label-generator "l_loop_head_"))
+        (^loop-exit-label (label-generator "l_loop_exit_")))
 
     (let ((^run
            (lambda (sym-tbl fvars indexed-consts)
@@ -2098,11 +2158,13 @@
                                     (let ((index (get-const-offset indexed-consts const)))
                                       (string-append (>comment (format "const ~s" const))
                                                      nl
-                                                     (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index)))))))))
+                                                     (>mov r0 (>imm (base+displ CONST_TABLE_BASE_ADDR (number->string index))))
+                                                     )))))
 
                              (pattern-rule
                               `(fvar ,(? 'v))
                               (lambda (v)
+
                                 (let ((index (search-fvar-index-by-name fvars v)))
                                   (string-append (>comment (format "fvar ~s" v))
                                                  nl
@@ -2119,8 +2181,8 @@
                                 (nl-string-append
                                  (>comment (format "bvar ~s ~s ~s" v major minor))
                                  (>mov r0 (>fparg 0))
-                                 (>mov r0 (>indd r0 major))
-                                 (>mov r0 (>indd r0 minor)))))
+                                 (>mov r0 (>indd r0 (number->string major)))
+                                 (>mov r0 (>indd r0 (number->string minor))))))
 
                              (pattern-rule
                               `(if3 ,(? 'test) ,(? 'dit) ,(? 'dif))
@@ -2128,23 +2190,29 @@
                                 (let ((else_label (if3-else))
                                       (exit_label (if3-exit)))
                                   (nl-string-append (>comment (format "if3 ~s ~s ~s" test dit dif))
-                                                    ""
+                                                    ;; calculate test
                                                     (code-gen major test)
                                                     (>cmp r0 (>imm sob-false))
-                                                    (>jmp exit_label)
+                                                    (>jeq else_label)
+
                                                     (code-gen major dit)
                                                     (>jmp exit_label)
+
                                                     (>make-label else_label)
                                                     (code-gen major dif)
+
+                                                    ;; exit:
                                                     (>make-label exit_label)
                                                     ))))
 
                              (pattern-rule
                               `(def ,(? 'var-name) ,(? 'val))
-                              (lambda (var-name val)
-                                (let ((index (search-fvar-index-by-name fvars var-name)))
-                                  (nl-string-append (code-gen major val)
-                                                    (>comment  (format "(def ~s ~s)" var-name val))
+                              (lambda (fvar val)
+                                (let* ((var-name (cadr fvar))
+                                       (index (search-fvar-index-by-name fvars var-name)))
+                                  (nl-string-append (>comment  (format "(def ~s ~s)" var-name val))
+                                                    (code-gen major val)
+                                                    (>comment  (format "def assignment (name: ~s, index: ~s)" var-name index))
                                                     (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string index)) R0)
                                                     (>mov R0 sob-void)))))
 
@@ -2193,16 +2261,15 @@
                              (pattern-rule
                               `(applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
-                                (let ((num-of-args (number->string (length exprs)))
+                                (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+                                      (num-of-args (number->string (length exprs)))
                                       (exprs (reverse exprs)))
                                   (nl-string-append (>comment (format "applic ~s ~s" func (reverse exprs)))
-                                        ;(>push "0") ;; for var and opt support
-                                                    (string-append-list
+                                                    (nl-string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
                                                           exprs))
                                                     (>push num-of-args)
-
                                                     (code-gen major func)
 
                                                     (>push (>indd R0 "1"))
@@ -2211,39 +2278,62 @@
 
                                                     (>pop R1)
                                                     (>drop R1)
-                                        ;(>drop "1") ;; for the (>push "0") earlier
                                                     ))))
 
-                             ;; TODO:
                              (pattern-rule
                               `(tc-applic ,(? 'func) ,(? 'exprs list?))
                               (lambda (func exprs)
-                                (let ((num-of-args (number->string (length exprs)))
-                                      (exprs (reverse exprs)))
-                                  (nl-string-append (>comment (format "tc-applic ~s ~s" func (reverse exprs)))
+                                (let ((map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
+                                      (num-of-args (number->string (length exprs)))
+                                      (exprs (reverse exprs))
+                                      (ret R5))
+                                  (nl-string-append (>comment (format "tc applic ~s ~s" func (reverse exprs)))
                                                     
-                                                    ;; drop sp in order to override old frame
-                                                    (>sub sp (base+displ num-of-args "2")) 
+                                                    #|
+                                                    ;"INFO"
                                                     
-                                                    ;; re-push evaluated arguments
-                                                    (string-append-list 
+                                                    (>pop fp)
+                                                    (>pop ret)
+                                                    
+                                                    "SHOW(\"fp \", FP);"
+                                                    "SHOW(\"ret \", R5);"
+                                                    
+                                                    (>mov sp fp)
+                                                    
+                                                    "SHOW(\"sp \", SP);"
+                                                    
+                                                    (nl-string-append-list
                                                      (map (lambda (e) (nl-string-append (code-gen major e)
                                                                                         (>push R0)))
                                                           exprs))
-                                                    ;; re-push evaluated arguments
                                                     (>push num-of-args)
-                                                    ;; generate retrieve lambda-sob
                                                     (code-gen major func)
-                                                    ;; push env
-                                                    (>push (>indd R0 "1"))
-                                                    ;; change fp to the old fp
-                                                    (>add sp "2") ; skip ret-addr and old-fp (without overriding it)
-                                                    (>pop R1)     ; pop old-fp into R1
-                                                    (>mov fp R1)  ; mov old-fp into fp
-                                                    ;; jump to the lambda's body label
-                                                    (>jmp-a (>indd R0 "2"))
-                                                    ))))
 
+                                                    (>push (>indd R0 "1"))
+                                                    
+                                                    (>push ret)
+                                                    
+                                                    "INFO"
+                                                    "SHOW(\"\", IND(0));"
+                                                    
+                                                    (>jmp-a (>indd R0 "2"))
+                                                    |#
+                                                    
+                                                    (nl-string-append-list
+                                                     (map (lambda (e) (nl-string-append (code-gen major e)
+                                                                                        (>push R0)))
+                                                          exprs))
+                                                    (>push num-of-args)
+                                                    (code-gen major func)
+
+                                                    (>push (>indd R0 "1"))
+                                                    (>calla (>indd R0 "2"))
+                                                    (>drop "1")
+
+                                                    (>pop R1)
+                                                    (>drop R1)
+                                                    ))))
+                                                    
                              (pattern-rule
                               `(or ,(? 'args list?))
                               (lambda (args)
@@ -2257,41 +2347,73 @@
                                                                                   args))
                                                  exit-label ":"))))
 
-                             ;; TODO: fix (fvar, bvar)
+                           #|
+                             `(fvar ,(? 'v))
+                             `(pvar ,(? 'v) ,(? 'minor))
+                             `(bvar ,(? 'v) ,(? 'major) ,(? 'minor))
+                             |#
                              (pattern-rule
                               `(set ,(? 'var) ,(? 'val))
-                              (let ((pvar-body-gen (lambda (minor) 
-                                                     (>mov (>fparg-displ 2 minor) r0)))
-                                    (bvar-body-gen (lambda (major minor) 
-                                                     (nl-string-append (>mov (>fparg-displ 2 minor) r0)
-                                                                       (>mov (>fparg-displ 2 minor) r0)
+                              (let ((pvar-body-gen (lambda (minor)
+                                                     (nl-string-append
+                                                      (>mov (>>arg (number->string minor)) r0)
+                                                      (string-append "SHOW(\"\", " (>>arg (number->string minor)) ");")
+                                                      "HALT"
+                                                      )
+                                                     ))
+                                    (bvar-body-gen (lambda (major minor)
+                                                     (nl-string-append "SHOW(\"\", R0)"
+                                                                       (>mov r1 (>fparg 0))       ; env   (get)
+                                                                       "SHOW(\"\", R1)"
+                                                                       (>mov r1 (>indd r0 (number->string major))) ; major (get)
+                                                                       (string-append "SHOW(\"\", INDD(R0" (number->string minor) "));")
+                                                                       (>mov (>indd r1 (number->string minor)) r0) ; minor (set)
+                                                                       (string-append "SHOW(\"\", INDD(R0" (number->string minor) "));")
+                                                                       "HALT"
                                                                        )
-                                                     )))
-                              (lambda (var val)
-                                (let ((var-type (car var)))
-                                  (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
-                                                 nl
-                                                 (cond ((equal? var-type 'fvar) (pvar-body-gen (cadr var)))
-                                                       ((equal? var-type 'bvar) "")
-                                                       ((equal? var-type 'pvar) "")
-                                                       (else (error 'code-gen "(set) this shouldn't happen")))
-                                                 (>mov r0 (>imm sob-void))
-                                                 nl)))))
+                                                     ))
+                                    (fvar-body-gen (lambda (fvar-name)
+                                                     (let ((fvar-offset (search-fvar-index-by-name fvars fvar-name)))
+                                                       (nl-string-append (>mov (>indd FVARS_TABLE_BASE_ADDR (number->string fvar-offset)) r0)
+                                                                         )
+                                                       ))))
+                                (lambda (var val)
+                                  (let ((var-type (car var)))
+                                    (string-append (>comment (format "set ~s ~s (~s)" var val var-type))
+                                                   nl
+                                                   (code-gen major val)
+                                                   nl
+                                                   (begin (display var-type) "")
+                                                   (cond ((equal? var-type 'pvar) (pvar-body-gen (caddr var)))
+                                                         ((equal? var-type 'bvar) (bvar-body-gen (caddr var) (cadddr var)))
+                                                         ((equal? var-type 'fvar) (fvar-body-gen (cadr var)))
+                                                         (else (error 'code-gen "(set) this shouldn't happen")))
+                                                   (>mov r0 (>imm sob-void))
+                                                   (string-append "SHOW(\"set\", R0);")
+                                                   "HALT"
+                                                   nl)))))
 
                              (pattern-rule
                               `(seq ,(? 'exprs list?))
                               (lambda (exprs)
                                 (string-append-list (map (lambda (expr) (>nl (code-gen major expr))) exprs))))
-                             
+
                              (pattern-rule
                               `(box ,(? 'var))
                               (lambda (var)
-                                (string-append (>comment (format "box ~s" var))
-                                               nl
-                                               (code-gen major var)
-                                               (>mov r1 r0)
-                                               (>mov-res r0 (>malloc "1"))
-                                               (>mov (>ind r0) r1))))
+                                (nl-string-append (>comment (format "box ~s" var))
+                                                  (code-gen major var)
+                                                  nl
+                                                  (>mov r1 r0)
+                                                  nl
+                                                  (>push r1)
+                                                  nl
+                                                  (>mov-res r0 (>malloc "1"))
+                                                  nl
+                                                  (>pop r1)
+                                                  nl
+                                                  (>mov (>ind r0) r1)
+                                                  nl)))
 
                              (pattern-rule
                               `(box-get ,(? 'var))
@@ -2324,7 +2446,7 @@
 ;; ________________________________________________________________
 (load "tdd-tools.scm")
 
-(define collect-defined-fvars
+(define scan-fvars
   (lambda (code)
     (fold-left
      (lambda (acc code-line)
@@ -2337,15 +2459,37 @@
 (define disassemble-const
   (lambda (c)
     (cond ((null? c) c)
-          ((not (list? c)) `(,c))
+          ((pair? c) (let ((first (car c))
+                           (second (cdr c)))
+                       `(,@(disassemble-const second) ,@(disassemble-const first) ,c)))
+
+          ((vector? c) `(,@(fold-left
+                            (lambda (acc obj)
+                              (let ((dis-obj (disassemble-const obj)))
+                                `(,@acc ,@dis-obj ,obj)))
+                            '()
+                            (vector->list c))
+                         ,c))
+
+
+          (else `(,c)))))
+
+
+
+
+#|;; old (buggy) version
+(define disassemble-const
+  (lambda (c)
+    (cond ((null? c) c)
+          ((not (pair? c)) `(,c))
           (else (let ((first (car c))
                       (rest (cdr c)))
                   `(,@(disassemble-const rest) ,@(disassemble-const first) ,c))))))
-
+|#
 
 
 ;; constructs the symbol and constant table
-;; 
+;;
 (define construct-tables
   (letrec ((^construct-sequence-tables
             (lambda (construct-tables-inner)
@@ -2385,7 +2529,7 @@
                                          (let* ((ds (disassemble-const c))
                                                 (constants (map (lambda (d) (if (symbol? d) (symbol->string d) d)) ds))
                                                 (symbols (fold-left (lambda (acc d) (if (symbol? d) (cons d acc) acc)) '() ds)))
-                                           (cont `(,@sym-tbl ,@symbols) `(,@consts ,@(sort SORT-COMPARATOR constants)))))))
+                                           (cont `(,@sym-tbl ,@symbols) `(,@consts ,@constants))))))
 
                                   ((equal? 'fvar p-name) (cont sym-tbl consts))
 
@@ -2501,8 +2645,7 @@
         `(procedure? ,t_closure)
         `(string? ,t_string)
         `(symbol? ,t_symbol)
-        `(vector? ,t_vector)
-        `(rational? ,t_rational)))
+        `(vector? ,t_vector)))
 
 
 
@@ -2527,25 +2670,7 @@
                  (>mov R0 sob-true)       ;
 
                  (>make-label label-exit) ; exit:
-
                  )
-
-#|                (nl-string-append (>push fp)
-                                  (>mov fp sp)
-
-                                  (>mov R0 (>fparg 2))     ; mov r0, argument
-                                  (>cmp (>ind R0) type)    ; cmp r0, t_?
-                                  (>jeq label-eq)          ; jump_eq equal
-                                  (>mov R0 sob-false)      ; mov r0, #f
-                                  (>jmp label-exit)        ; jmp exit
-                                  (>make-label label-eq)   ; equal:
-                                  (>mov R0 sob-true)       ; mov r0, #t
-
-                                  (>make-label label-exit) ; exit:
-                                  (>mov sp fp)
-                                  (>pop fp)
-                                  (>ret)
-                                  )|#
                 ))))))
 
 
@@ -2590,12 +2715,14 @@
   (lambda () (>>scheme-function
               (>mov R0 (>>arg "0"))
               (>mov (>indd R0 "1") (>>arg "1"))
+              (>mov R0 sob-void)
               )))
 
 (define set-cdr!-encoder
   (lambda () (>>scheme-function
               (>mov R0 (>>arg "0"))
               (>mov (>indd R0 "2") (>>arg "1"))
+              (>mov R0 sob-void)
               )))
 
 (define string-length-encoder
@@ -2637,50 +2764,106 @@
               )))
 
 (define string->symbol-encoder
-  (let ((^exit-label (label-generator "string_to_symbol_exit_label_"))
-        (compare-symbol-and-string
-         (let ((^dit-label (label-generator "compare_symbol_and_string_cond_dit_"))
-               (^cond-exit-label (label-generator "compare_symbol_and_string_cond_exit_")))
-           (lambda (<dit> <dif>)
-             (let ((dit-label (^dit-label))
-                   (cond-exit-label (^cond-exit-label)))
-               (nl-string-append (>jeq dit-label)
-                                 <dif>
-                                 (>jmp cond-exit-label)
-                                 (>make-label dit-label)
-                                 <dit>
-                                 (>make-label cond-exit-label)
-                                 ))))))
-    (lambda ()
-      (let ((exit-label (^exit-label)))
-        (>>scheme-function                                  ;                | we need this
-         (>mov R0 (>>arg "0"))                              ;                v
-         (>for-loop (base+displ SYMBOL_TABLE_BASE_ADDR "1") ; [t_symbol | rep_str ]
-                    (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
-                    >inc-twice
-                    >jge
-                    (>cmp R0 (>indd SYMBOL_TABLE_BASE_ADDR loop-counter))
-                    (compare-symbol-and-string
-                     (nl-string-append (>dec loop-counter)
-                                       (>mov R0 (>imm (base+displ loop-counter SYMBOL_TABLE_BASE_ADDR)))
-                                       (>jmp exit-label)
-                                       )
-                     ""  ;; nothing to do if false
-                     ))
-
-         ;; encode new symbol into the symbol table
-         (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) R0)
-         (>dec loop-counter)
-         (>mov (>indd SYMBOL_TABLE_BASE_ADDR loop-counter) t_symbol)
-         ;; mov symbol to R0 
-         (>mov R0 (>imm (base+displ SYMBOL_TABLE_BASE_ADDR loop-counter)))
-         ;; increment sym-tbl length counter
-         (>mov R7 (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR))
-         (>inc R7)
-         (>mov (>ind SYMBOL_TABLE_LENGTH_COUNTER_ADDR) R7) ;; R7 is loop-counter
-         ;; exit label
-         (>make-label exit-label)
+  (let* ((str r1)
+         (str-length r2)
+         (i r3) ; i is the actual address and not an index!
+         (j r4)
+         (N r5) ; N is also an actual address and not just a limit 
+         (tbl-length-ptr SYMBOL_TABLE_LENGTH_COUNTER_ADDR)
+         (tbl-length r6)
+         (l-search-loop-head "string_to_symbol_search_loop_head")
+         (l-found-one "string_to_symbol_found_one")
+         (l-not-found "string_to_symbol_not_found")
          
+         ;; compare loop
+         (l-equal "string_to_symbol_compare_equal")
+         (l-not-equal "string_to_symbol_compare_not_equal")
+         (l-compare-loop-head "string_to_symbol_compare_loop_head")
+         (symbol-str r7)
+         
+         (l-exit "string_to_symbol_exit")
+         )
+         
+    (lambda ()
+      (let ((exit-label "string_to_symbol_exit_label_"))
+        (>>scheme-function
+         
+         ;; assign local variables
+         ;;
+         (>mov str (>>arg "0"))
+         (>mov str-length (>indd str "1"))
+         (>mov tbl-length (>ind tbl-length-ptr))
+         (>mov i (>imm SYMBOL_TABLE_BASE_ADDR))
+         (>add i "1")
+         (>mov N (>imm SYMBOL_TABLE_BASE_ADDR))
+         (>add N tbl-length)
+         ;; search for matching symbol int the table
+         ;; main loop
+         (>make-label l-search-loop-head)
+         (>cmp i N)
+         (>jge l-not-found)
+         
+         ;; compare string and current symbol's str representation
+         ;;
+         ;; retrieve symbol's str representation
+         (>mov symbol-str i)
+         (>mov symbol-str (>ind symbol-str))
+         
+         ;; compare length
+         (>cmp str-length (>indd symbol-str "1"))
+         (>jne l-not-equal)
+         
+         ;; 
+         (>mov j "2") ; first char
+         
+         ;; loop head
+         (>make-label l-compare-loop-head)
+         
+         (>cmp j (string-append str-length "+2"))
+         (>jeq l-equal) ; all characters are equal between the strings
+         
+         (>cmp (>indd str j) (>indd symbol-str j)) ; compare current characters
+         (>jne l-not-equal)
+         (>add j "1")
+         (>jmp l-compare-loop-head)
+         (>make-label l-not-equal)
+         ;; end of compare loop
+         
+         
+         (>add i "2")
+         (>jmp l-search-loop-head)
+         ;; end of search loop
+         
+         
+         
+         
+         ;; found a matching symbol!
+         ;; -->  assign address to R0
+         ;;
+         (>make-label l-equal)
+         (>make-label l-found-one)
+         (>sub i "1")
+         (>mov R0 i)
+         (>jmp l-exit)
+         
+         
+         ;; no matching symbol
+         ;; --> create one and assign it to R0
+         ;; --> increment the tbl-length of the symbol table
+         ;;
+         (>make-label l-not-found)
+         ;"SHOW(\"not found\", R1)"
+         (>add tbl-length "1")              ; increment tbl-length
+         (>mov (>ind tbl-length-ptr) tbl-length) ; update variable
+         
+         (>mov (>ind i) str)      ; 
+         (>sub i "1")
+         (>mov (>ind i) t_symbol) ; 
+         (>mov R0 i)
+         (>jmp l-exit)
+         
+         
+         (>make-label l-exit)
          )))))
 
 
@@ -2707,7 +2890,6 @@
 
 (define string-set!-encoder
   (lambda () (>>scheme-function
-
               (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
               (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
               (>mov R2 (>>arg "2")) ; R2 is SOB_CHAR
@@ -2721,17 +2903,17 @@
 
 (define vector-set!-encoder
   (lambda () (>>scheme-function
-
+              
               (>mov R0 (>>arg "0")) ; R0 is SOB_STRING
               (>mov R1 (>>arg "1")) ; R1 is SOB_INTEGER
               (>mov R2 (>>arg "2")) ; R2 is some SOB
 
               (>mov R1 (>indd R1 "1")) ; R1 is integer
-
-              (>mov (>indd R0 (base+displ "2" R1)) R2)
+              (>add R1 "2")
+              
+              (>mov (>indd R0 R1) R2)
               (>mov R0 sob-void)
               )))
-
 
 (define zero?-encoder
   (lambda ()
@@ -2741,7 +2923,7 @@
 
        (>mov R0 (>>arg "0"))
        (>mov R0 (>indd R0 "1"))
-
+       
        (>cmp R0 (>imm "0"))
        (>jeq label-eq)
 
@@ -2753,6 +2935,30 @@
 
        (>make-label label-exit)
        ))))
+
+(define +-encoder
+  (lambda ()
+    (let ((num-of-args R2))
+      (>>scheme-function
+
+       (>mov num-of-args (>fparg "1"))
+       (>mov R0 "0")
+       ;; for (...) { body }
+       (>for-loop "2"                          ; i = 2 
+                  (base+displ num-of-args "2") ; i < num-of-args + 2
+                  >inc                         ; i++
+                  >jge                         ; (for i-- it would be >jle... you get it)
+                  ;; loop body:
+                  (>mov R1 (>fparg-nan loop-counter))
+                  (>add r0 r1)
+                  )
+
+       (>push r0)
+       (>call "MAKE_SOB_INTEGER")
+       (>drop "1")
+
+       ))))
+
 (load "max-library-functions.scm")
 (define cisc-lib-encoders `(,@(generate-predicate-encoders)
                             (car  . ,car-encoder)
@@ -2768,6 +2974,7 @@
                             (vector-ref . ,vector-ref-encoder)
                             (zero? . ,zero?-encoder)
                             (string-set! . ,string-set!-encoder)
+                            (vector-set! . ,vector-set!-encoder)
                             (symbol->string . ,symbol->string-encoder)
                             (string->symbol . ,string->symbol-encoder)
                             ,@max-library-functions-encoders
@@ -2844,10 +3051,14 @@
                   (>nl (>mov (>indd base-addr (number->string (counter))) val)))))
         (string-append (>nl (>comment "encode-const-table"))
                        (string-append-list (map (lambda (const)
-                                                  (let ((sym-const-retrieve-actual-addr
-                                                         (lambda (c) (if (symbol? c)
-                                                                         (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
-                                                                         (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
+                                                  (let* ((classic-special-char? (lambda (c) (or (equal? c #\') (equal? c #\\))))
+                                                         (un-special-char (lambda (c) (cond ((classic-special-char? c) (list #\\ c))
+                                                                                            ((equal? c #\newline) (list #\\ #\n))
+                                                                                            (else (list c)))))
+                                                         (sym-const-retrieve-actual-addr
+                                                          (lambda (c) (if (symbol? c)
+                                                                          (base+displ SYMBOL_TABLE_BASE_ADDR (number->string (get-symbol-offset-in-table sym-tbl c)))
+                                                                          (base+displ CONST_TABLE_BASE_ADDR (number->string (get-const-offset indexed-table c)))))))
                                                     (cond ((equal? const (void)) (encode t_void))
 
                                                           ((null? const) (encode t_nil))
@@ -2855,7 +3066,7 @@
                                                           ((boolean? const) (nl-string-append (encode (>imm (number->string (if const 1 0))))
                                                                                               (encode t_bool)))
 
-                                                          ((char? const) (nl-string-append (encode (string-append "'" (list->string `(,const)) "'"))
+                                                          ((char? const) (nl-string-append (encode (string-append "'" (list->string (un-special-char const)) "'"))
                                                                                            (encode t_char)))
 
                                                           ((integer? const)
@@ -2875,23 +3086,24 @@
                                                           ((string? const)
                                                            (nl-string-append (string-append-list
                                                                               (map (lambda (char)
-                                                                                     (>nl (encode (list->string (list #\' char #\')))))
+                                                                                     (>nl (encode (list->string `(#\' ,@(un-special-char char) #\')))))
                                                                                    (string->list const)))
                                                                              (encode (>imm (number->string (string-length const))))
                                                                              (encode t_string)))
-                                                          
-                                                          ((vector? const) (nl-string-append (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
-                                                                                                  (vector->list const))
-                                                                                             (encode (vector-length const)) ;; TODO: number->string 
+
+                                                          ((vector? const) (nl-string-append (nl-string-append-list
+                                                                                              (map (lambda (el) (encode (>imm (sym-const-retrieve-actual-addr el))))
+                                                                                                   (vector->list const)))
+                                                                                             (encode (number->string (vector-length const)))
                                                                                              (encode t_vector)))
-                                                          
+
                                                           ((rational? const) (nl-string-append (encode (>imm (number->string (denominator const))))
                                                                                                (encode (>imm (number->string (numerator const))))
                                                                                                (encode t_rational)))
 
                                                           ((procedure? const) "ERROR_WTF_SHOULDN'T_HAPPEN_2")
                                                           ((symbol? const) "ERROR_WTF_SHOULDN'T_HAPPEN")
-                                                          
+
                                                           (else (error 'encode-const-table (format "cant decide type of argument: ~s" const))))))
                                                 (vector->list table))))))))
 
@@ -2926,13 +3138,9 @@
 ;; 
 (define make-print
   (let* ((^skip-label (label-generator "skip_print_"))
-         (prologue "\n")
+         (prologue nl)
          (epilogue (lambda (skip-label) (nl-string-append
-<<<<<<< HEAD
-                                         ;; "INFO"
-=======
->>>>>>> 0366707a7c09e9310550062aa50f077fc0082b92
-                                         ;; "SHOW(\"SP\", SP);"
+                                         
                                          (>cmp r0 sob-void)
                                          (>jeq skip-label)
                                          (>push r0)
@@ -2952,7 +3160,6 @@
 (define prologue "
 /* change to 0 for no debug info to be printed: */
 #define DO_SHOW 1
-
 #include \"arch/debug_macros.h.c\"
 
 #include <stdio.h>
@@ -2981,15 +3188,41 @@ return 0;
 "
 
 (define list (lambda x x))
-(define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 (define number? (lambda (n) (or (integer? n) (rational? n))))
+(define map (lambda (f x) (if (null? x) x (cons (f (car x)) (map f (cdr x))))))
 
+
+(define append-helper (lambda (c e)
+                        (if (null? e)
+                          c
+                          (if (null? c)
+                              (append-helper (car e) (cdr e))
+                              (if (pair? c)
+                                  (cons (car c) (append-helper (cdr c) e))
+                                  c)))))
+(define append
+<<<<<<< HEAD
+  (letrec ((append-helper (lambda (c e)
+                            (if (null? c)
+                                (if (null? e)
+                                    '()
+                                    (append-helper (car e) (cdr e)))
+                                (if (pair? c)
+                                    (cons (car c) (append-helper (cdr c) e))
+                                    c)))))
+    (lambda elements
+      (append-helper '() elements))))
+=======
+  (lambda elements
+    (append-helper '() elements)))
+>>>>>>> 518cbe0bd0d75a0c5309023cb7f1bf66109a1c3c
 ")
 
 (define compile-scheme-file
   (lambda (source dest)
     (let* ((code-text (file->string source))
            (code-text (string-append scheme-written-lib-functions code-text))
+
            (sexprs (string->sexpr code-text (lambda (w) (error 'string->sexpr (format "input is not a legal symbolic expression: ~s" w)))))
            (pes
             (map (lambda (sexpr)
@@ -3007,11 +3240,9 @@ return 0;
            (consts-table-n-length (create-const-table-indexes consts))
            (indexed-const-table (vector->list (car consts-table-n-length)))
            (const-table-length (number->string (cdr consts-table-n-length)))
-
-           (fvars (list->vector (collect-defined-fvars pes)))
-           ;; TODO: fvars-table-length might change when we add assembly library functions
+           ;; TODO: change scan-vars
+           (fvars (list->vector (scan-fvars pes)))
            (fvars-table-length (number->string (vector-length fvars)))
-
 
 
            (generated-code (fold-left string-append "" (map (lambda (pe) (make-print (code-gen pe sym-tbl fvars indexed-const-table))) pes)))

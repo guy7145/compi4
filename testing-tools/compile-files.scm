@@ -3,9 +3,9 @@
 
 (define compile-and-make-comparison-script
   (let* ((compare-script-file "automated-compare-tests.scm")
-         (filenames (list "or-tests" )) ; "cse-example" "numbers-and-booleans" "if-test"
+         (filenames (list)) ; "cse-example" "numbers-and-booleans" "if-test" "or-tests"
          ;(filenames `(,@filenames "simple-example"))
-         (filenames `(,@filenames "some-test-cases"))
+         ;(filenames `(,@filenames "some-test-cases"))
          ;(filenames `(,@filenames "max-lib-tests"))
          ;(filenames `(,@filenames "lambda-var"))
          ;(filenames `(,@filenames "lambda-opt"))
@@ -18,14 +18,15 @@
          ;(filenames `(,@filenames "scheme-written-lib-functions"))
          ;(filenames `(,@filenames "lib-functions"))
          (filenames `(,@filenames "append"))
-         ;(filenames `(,@filenames "rationals"))
+         (filenames `(,@filenames "rationals"))
          (filenames `(,@filenames "lambda-opt-var-stack-fix"))
-         ;(filenames `(,@filenames "a22"))
+         (filenames `(,@filenames "a22"))
          ;(filenames `(,@filenames "test06"))
          ;(filenames `(,@filenames "apply"))
          ;(filenames `(,@filenames "test03"))
-         ;(filenames `(,@filenames "string-to-symbol"))
-         (filenames `(,@filenames "append"))
+         (filenames `(,@filenames "string-to-symbol"))
+         ;(filenames `(,@filenames "tc-applic"))
+         (filenames `(,@filenames "debug-mayer"))
          ;(filenames `(,@filenames "test09"))
          (prologue "
 (load \"tdd-tools.scm\")

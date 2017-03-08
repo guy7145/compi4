@@ -58,7 +58,7 @@ do
 	echo running scheme...
 	scheme --quiet < ${file%.c}.scm > ${file%.c}.out1
 	echo running c...
-#	sh -c "./${file%.c}.o"
+	sh -c "./${file%.c}.o"
 	sh -c "./${file%.c}.o >${file%.c}.out2 2>${file%.c}.out2"
 	# format lists
 #	sed -i "s/. (//g" ${file%.c}.out1
