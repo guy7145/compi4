@@ -12,11 +12,11 @@ a
 ;;;
 ;;; Programmer: Mayer Goldberg, 2010
 
-((lambda (x) (x x 1000000))
- (lambda (x n)
-   (if  (zero? n) 
-	#t
-        (x x (- n 1)))))
+;;((lambda (x) (x x 1000000))
+;; (lambda (x n)
+;;   (if  (zero? n) 
+;;	#t
+;;        (x x (- n 1)))))
 
 
 
@@ -49,10 +49,10 @@ a
   (vs! 1 234)
   (vs! 2 #\P))
 
-(vector-set! '#(0 0 0) 0 2)
+;(vector-set! '#(0 0 0) 0 2)
 
-(let* ((v (make-vector 3))
-       (vs! (lambda (i x) (vector-set! v i x))))
-  (vs! 0 'a)
-  (vs! 1 234)
-  (vs! 2 #\P))
+;(let* ((v (make-vector 3))
+;       (vs! (lambda (i x) (vector-set! v i x))))
+;  (vs! 0 'a)
+;  (vs! 1 234)
+;  (vs! 2 #\P))

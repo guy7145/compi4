@@ -1,1 +1,6 @@
 ((lambda s s))
+((lambda s s) 1 2 3)
+((lambda (a b . c) a) 1 2 3 4)
+((lambda (a b . c) b) 1 2 3 4)
+((lambda (a b . c) c) 1 2 3 4)
+((lambda (a b . c) (list a b c)) 1 2 3 4)
